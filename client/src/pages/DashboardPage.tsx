@@ -2,7 +2,23 @@ import { useState } from "react";
 import Sidebar, { type View } from "../components/Sidebar";
 import { useAuth } from "../hooks/useAuth";
 import MigrationPage from "./MigrationPage";
+import MigrationHistoryPage from "./MigrationHistoryPage";
 import AdminUsersPage from "./AdminUsersPage";
+
+const pageTitles: Record<View, { title: string; subtitle: string }> = {
+    wizard: {
+        title: "Migrate Data",
+        subtitle: "Connect two MySQL databases, review the mapping, and run the migration."
+    },
+    history: {
+        title: "Migration History",
+        subtitle: "Browse past migration runs and download their reports."
+    },
+    admin: {
+        title: "User Management",
+        subtitle: "Create accounts and manage access roles."
+    }
+};
 
 export default function DashboardPage() {
     const { user, logout } = useAuth();
@@ -17,17 +33,13 @@ export default function DashboardPage() {
             <div className="flex-1 overflow-y-auto">
                 <div className="mx-auto max-w-5xl px-8 py-8">
                     <header className="mb-8">
-                        <h1 className="text-2xl font-semibold text-slate-900">
-                            {view === "admin" ? "User Management" : "Migrate Data"}
-                        </h1>
-                        <p className="mt-1 text-sm text-slate-500">
-                            {view === "admin"
-                                ? "Create accounts and manage access roles."
-                                : "Connect two MySQL databases, review the mapping, and run the migration."}
-                        </p>
+                        <h1 className="text-2xl font-semibold text-slate-900">{pageTitles[view].title}</h1>
+                        <p className="mt-1 text-sm text-slate-500">{pageTitles[view].subtitle}</p>
                     </header>
 
-                    {view === "admin" ? <AdminUsersPage /> : <MigrationPage />}
+                    {view === "admin" && <AdminUsersPage />}
+                    {view === "history" && <MigrationHistoryPage />}
+                    {view === "wizard" && <MigrationPage />}
                 </div>
             </div>
         </div>
