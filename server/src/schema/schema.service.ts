@@ -2,7 +2,7 @@ import mysql from "mysql2/promise";
 
 class SchemaService {
 
-    async getTables(connection: mysql.Connection) {
+    async getTables(connection: mysql.Pool) {
 
         const [tables]: any = await connection.query("SHOW TABLES");
         const result = [];
@@ -18,12 +18,12 @@ class SchemaService {
         return result;
     }
 
-    async getColumns(connection: mysql.Connection, tableName: string) {
+    async getColumns(connection: mysql.Pool, tableName: string) {
         const [columns]: any = await connection.query(`SHOW COLUMNS FROM \`${tableName}\``);
         return columns;
     }
 
-    async getForeignKeys(connection: mysql.Connection, tableName: string) {
+    async getForeignKeys(connection: mysql.Pool, tableName: string) {
 
         const [db]: any = await connection.query("SELECT DATABASE() db");
         const database = db[0].db;
@@ -37,7 +37,7 @@ class SchemaService {
         return foreignKeys;
     }
 
-    async getSchema(connection: mysql.Connection) {
+    async getSchema(connection: mysql.Pool) {
         const tables = await this.getTables(connection);
         const schema = [];
         for (const table of tables) {

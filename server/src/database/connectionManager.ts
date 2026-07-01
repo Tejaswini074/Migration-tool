@@ -2,9 +2,9 @@ import mysql from "mysql2/promise";
 
 class ConnectionManager {
 
-    private connections: Map<string, mysql.Connection> = new Map();
+    private connections: Map<string, mysql.Pool> = new Map();
 
-    add(id: string, connection: mysql.Connection) {
+    add(id: string, connection: mysql.Pool) {
         this.connections.set(id, connection);
     }
 

@@ -1,6 +1,6 @@
 import { ArrowRightLeft, Database, LogOut, Users } from "lucide-react";
 import { cn } from "../lib/cn";
-import type { AuthUser } from "../api/types";
+import type { AuthUser } from "../types";
 
 export type View = "wizard" | "admin";
 

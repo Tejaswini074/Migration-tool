@@ -8,7 +8,6 @@ export const connectDatabase = async (req: Request, res: Response): Promise<void
 
     try {
         const { host, port, user, password, database } = req.body;
-
         if (!host || !port || !user || !database) {
 
             res.status(400).json({
@@ -17,13 +16,15 @@ export const connectDatabase = async (req: Request, res: Response): Promise<void
             });
             return;
         }
-        const connection = await mysql.createConnection({
-            host, port, user, password, database
+        const pool = mysql.createPool({
+            host, port, user, password, database,
+            waitForConnections: true,
+            connectionLimit: 10
         });
 
-        await connection.query("SELECT 1");
+        await pool.query("SELECT 1");
         const connectionId = uuid();
-        connectionManager.add(connectionId, connection);
+        connectionManager.add(connectionId, pool);
 
         res.status(200).json({
             success: true,
@@ -38,9 +39,7 @@ export const connectDatabase = async (req: Request, res: Response): Promise<void
             success: false,
             message: error.message
         });
-
     }
-
 };
 
 export const disconnectDatabase = async (req: Request, res: Response): Promise<void> => {
@@ -77,11 +76,9 @@ export const disconnectDatabase = async (req: Request, res: Response): Promise<v
 export const getActiveConnections = async (req: Request, res: Response): Promise<void> => {
 
     try {
-
         const activeConnections: any[] = [];
         connectionManager.getAll().forEach((_, connectionId) => {
             activeConnections.push({ connectionId });
-
         });
 
         res.status(200).json({

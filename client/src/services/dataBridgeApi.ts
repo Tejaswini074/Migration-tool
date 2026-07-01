@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { MigrationRun, TableRecommendation, TableSchema } from "./types";
+import type { MigrationRunSummary, MigrationRun, TableRecommendation, TableSchema } from "../types";
 
 export interface ConnectPayload {
     host: string;
@@ -97,4 +97,31 @@ export const getMigrationStatus = async (runId: string) => {
         `/migration/status/${runId}`
     );
     return data.run;
+};
+
+export const getMigrationHistory = async (connectionId: string) => {
+    const { data } = await apiClient.get<{ success: boolean; runs: MigrationRunSummary[] }>(
+        `/migration/history/${connectionId}`
+    );
+    return data.runs;
+};
+
+export const downloadMigrationReport = async (
+    connectionId: string,
+    runId: string,
+    format: "csv" | "pdf"
+) => {
+    const response = await apiClient.get(`/migration/report/${connectionId}/${runId}`, {
+        params: { format },
+        responseType: "blob"
+    });
+
+    const blobUrl = window.URL.createObjectURL(response.data);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = `migration-report-${runId}.${format}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(blobUrl);
 };

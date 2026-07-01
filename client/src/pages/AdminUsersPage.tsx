@@ -1,77 +1,32 @@
-import { useEffect, useState, type FormEvent } from "react";
 import { Trash2, UserPlus } from "lucide-react";
-import { createUser, deleteUser, listUsers, updateUserRole } from "../api/authApi";
-import { extractErrorMessage } from "../api/client";
-import { useAuth } from "../auth/AuthContext";
-import type { ManagedUser, UserRole } from "../api/types";
-import Card from "./ui/Card";
-import Input from "./ui/Input";
-import Select from "./ui/Select";
-import Button from "./ui/Button";
-import Badge from "./ui/Badge";
+import { useUsers } from "../hooks/useUsers";
+import { useAuth } from "../hooks/useAuth";
+import type { UserRole } from "../types";
+import Card from "../components/ui/Card";
+import Input from "../components/ui/Input";
+import Select from "../components/ui/Select";
+import Button from "../components/ui/Button";
+import Badge from "../components/ui/Badge";
 
 export default function AdminUsersPage() {
     const { user: currentUser } = useAuth();
-    const [users, setUsers] = useState<ManagedUser[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    const [name, setName] = useState("");
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [role, setRole] = useState<UserRole>("user");
-    const [creating, setCreating] = useState(false);
-
-    const refresh = async () => {
-        setLoading(true);
-        try {
-            setUsers(await listUsers());
-        } catch (err) {
-            setError(extractErrorMessage(err));
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => { refresh(); }, []);
-
-    const handleCreate = async (e: FormEvent) => {
-        e.preventDefault();
-        setCreating(true);
-        setError(null);
-        try {
-            await createUser({ name, email, password, role });
-            setName("");
-            setEmail("");
-            setPassword("");
-            setRole("user");
-            await refresh();
-        } catch (err) {
-            setError(extractErrorMessage(err));
-        } finally {
-            setCreating(false);
-        }
-    };
-
-    const handleRoleChange = async (userId: number, newRole: UserRole) => {
-        setError(null);
-        try {
-            await updateUserRole(userId, newRole);
-            await refresh();
-        } catch (err) {
-            setError(extractErrorMessage(err));
-        }
-    };
-
-    const handleDelete = async (userId: number) => {
-        setError(null);
-        try {
-            await deleteUser(userId);
-            await refresh();
-        } catch (err) {
-            setError(extractErrorMessage(err));
-        }
-    };
+    const {
+        users,
+        loading,
+        error,
+        name,
+        setName,
+        email,
+        setEmail,
+        password,
+        setPassword,
+        role,
+        setRole,
+        creating,
+        handleCreate,
+        handleRoleChange,
+        handleDelete
+    } = useUsers();
 
     return (
         <div className="flex flex-col gap-5">
@@ -80,7 +35,13 @@ export default function AdminUsersPage() {
                     <UserPlus className="h-4 w-4 text-slate-400" />
                     <h3 className="text-sm font-semibold text-slate-900">Add user</h3>
                 </div>
-                <form className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5" onSubmit={handleCreate}>
+                <form
+                    className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        handleCreate();
+                    }}
+                >
                     <Input placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} />
                     <Input
                         type="email"

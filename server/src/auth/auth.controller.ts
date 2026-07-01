@@ -18,8 +18,6 @@ export const getBootstrapStatus = async (req: AuthenticatedRequest, res: Respons
     }
 };
 
-// Open registration only ever creates the first (admin) account.
-// Once a user exists, new accounts must be created by an admin via POST /users.
 export const register = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
         const { name, email, password } = req.body;
@@ -40,13 +38,37 @@ export const register = async (req: AuthenticatedRequest, res: Response): Promis
 
         const role: UserRole = "admin";
         const userId = await authService.createUser({ name, email, password, role });
-        const token = signToken({ userId, email, role });
+        const token = signToken({ userId, name, email, role });
 
         res.json({ success: true, token, user: { id: userId, name, email, role } });
 
     } catch (err: any) {
         res.status(400).json({ success: false, message: err.message });
     }
+};
+
+// Open self-registration: anyone can create their own account (always role "user").
+// Distinct from register() above, which only ever creates the first (admin) account.
+export const signup = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+
+    try {
+
+        const { name, email, password } = req.body;
+
+        if (!name || !email || !password) {
+            res.status(400).json({ success: false, message: "Name, email and password are required" });
+            return;
+        }
+
+        const userId = await authService.createUser({ name, email, password, role: "user" });
+        const token = signToken({ userId, name, email, role: "user" });
+
+        res.json({ success: true, token, user: { id: userId, name, email, role: "user" } });
+
+    } catch (err: any) {
+        res.status(400).json({ success: false, message: err.message });
+    }
+
 };
 
 export const login = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -70,7 +92,12 @@ export const login = async (req: AuthenticatedRequest, res: Response): Promise<v
             return;
         }
 
-        const token = signToken({ userId: user.id, email: user.email, role: user.role as UserRole });
+        const token = signToken({
+            userId: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role as UserRole
+        });
 
         res.json({
             success: true,

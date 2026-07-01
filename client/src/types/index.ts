@@ -86,3 +86,18 @@ export interface MigrationRun {
     finishedAt: string | null;
     tables: TableRunState[];
 }
+
+export interface MigrationRunSummary {
+    id: number;
+    run_id: string;
+    project_id: number;
+    project_name: string;
+    source_database: string;
+    destination_database: string;
+    started_by_user_id: number;
+    started_by_name: string;
+    started_by_email: string;
+    status: "running" | "completed" | "failed";
+    started_at: string;
+    finished_at: string | null;
+}

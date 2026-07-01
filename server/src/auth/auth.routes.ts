@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
     getBootstrapStatus,
     register,
+    signup,
     login,
     me,
     listUsers,
@@ -15,6 +16,7 @@ const router = Router();
 
 router.get("/bootstrap-status", getBootstrapStatus);
 router.post("/register", register);
+router.post("/signup", signup);
 router.post("/login", login);
 
 router.get("/me", authenticate, me);

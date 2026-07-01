@@ -1,8 +1,6 @@
-import { useState, type ChangeEvent } from "react";
 import { CheckCircle2, Server } from "lucide-react";
-import { connectDatabase, getDatabaseSchema } from "../api/dataBridgeApi";
-import { extractErrorMessage } from "../api/client";
-import type { ConnectionState } from "../api/types";
+import { useConnection } from "../hooks/useConnection";
+import type { ConnectionState } from "../types";
 import Card from "./ui/Card";
 import Input from "./ui/Input";
 import Button from "./ui/Button";
@@ -13,36 +11,8 @@ interface Props {
     onConnected: (state: ConnectionState) => void;
 }
 
-const initialForm = { host: "localhost", port: "3306", user: "root", password: "", database: "" };
-
-export default function ConnectionForm({ label, connection, onConnected }: Props) {
-    const [form, setForm] = useState(initialForm);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    const handleChange = (field: keyof typeof form) => (e: ChangeEvent<HTMLInputElement>) => {
-        setForm((f) => ({ ...f, [field]: e.target.value }));
-    };
-
-    const handleConnect = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const result = await connectDatabase(form);
-            const schema = await getDatabaseSchema(result.connectionId);
-            onConnected({
-                connectionId: result.connectionId,
-                database: result.database,
-                host: form.host,
-                port: form.port,
-                schema
-            });
-        } catch (err) {
-            setError(extractErrorMessage(err));
-        } finally {
-            setLoading(false);
-        }
-    };
+export default function ConnectionCard({ label, connection, onConnected }: Props) {
+    const { form, handleChange, loading, error, connect } = useConnection(onConnected);
 
     if (connection) {
         return (
@@ -77,17 +47,21 @@ export default function ConnectionForm({ label, connection, onConnected }: Props
                     <Input label="Port" value={form.port} onChange={handleChange("port")} />
                 </div>
                 <Input label="User" value={form.user} onChange={handleChange("user")} />
-                <Input label="Password" type="password"
-                    value={form.password} onChange={handleChange("password")}
+                <Input
+                    label="Password"
+                    type="password"
+                    value={form.password}
+                    onChange={handleChange("password")}
                 />
                 <Input label="Database" value={form.database} onChange={handleChange("database")} />
             </div>
 
             {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
-            <Button loading={loading}
+            <Button
+                loading={loading}
                 disabled={!form.host || !form.database || !form.user}
-                onClick={handleConnect}
+                onClick={connect}
                 className="mt-4 w-full"
             >
                 Connect

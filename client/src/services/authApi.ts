@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { AuthUser, ManagedUser, UserRole } from "./types";
+import type { AuthUser, ManagedUser, UserRole } from "../types";
 
 export const getBootstrapStatus = async () => {
     const { data } = await apiClient.get<{ success: boolean; needsBootstrap: boolean }>(
@@ -11,6 +11,14 @@ export const getBootstrapStatus = async () => {
 export const registerFirstAdmin = async (payload: { name: string; email: string; password: string }) => {
     const { data } = await apiClient.post<{ success: boolean; token: string; user: AuthUser }>(
         "/auth/register",
+        payload
+    );
+    return data;
+};
+
+export const signup = async (payload: { name: string; email: string; password: string }) => {
+    const { data } = await apiClient.post<{ success: boolean; token: string; user: AuthUser }>(
+        "/auth/signup",
         payload
     );
     return data;

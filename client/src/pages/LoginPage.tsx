@@ -1,19 +1,24 @@
 import { useState, type FormEvent } from "react";
 import { Database } from "lucide-react";
-import { useAuth } from "./AuthContext";
-import { extractErrorMessage } from "../api/client";
+import { useAuth } from "../hooks/useAuth";
+import { extractErrorMessage } from "../services/client";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 
-export default function AuthGate() {
-    const { needsBootstrap, login, registerFirstAdmin } = useAuth();
+type Mode = "login" | "signup";
 
+export default function LoginPage() {
+    const { needsBootstrap, login, registerFirstAdmin, signup } = useAuth();
+
+    const [mode, setMode] = useState<Mode>("login");
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const isSignupForm = needsBootstrap || mode === "signup";
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
@@ -22,6 +27,8 @@ export default function AuthGate() {
         try {
             if (needsBootstrap) {
                 await registerFirstAdmin(name, email, password);
+            } else if (mode === "signup") {
+                await signup(name, email, password);
             } else {
                 await login(email, password);
             }
@@ -44,7 +51,7 @@ export default function AuthGate() {
 
                 <Card>
                     <h2 className="text-lg font-semibold text-slate-900">
-                        {needsBootstrap ? "Create the admin account" : "Sign in"}
+                        {needsBootstrap ? "Create the admin account" : mode === "signup" ? "Create an account" : "Sign in"}
                     </h2>
                     {needsBootstrap && (
                         <p className="mt-1 text-sm text-slate-500">
@@ -53,7 +60,7 @@ export default function AuthGate() {
                     )}
 
                     <form className="mt-5 flex flex-col gap-4" onSubmit={handleSubmit}>
-                        {needsBootstrap && (
+                        {isSignupForm && (
                             <Input
                                 label="Full name"
                                 value={name}
@@ -78,12 +85,29 @@ export default function AuthGate() {
                         <Button
                             type="submit"
                             loading={loading}
-                            disabled={!email || !password || (needsBootstrap && !name)}
+                            disabled={!email || !password || (isSignupForm && !name)}
                             className="mt-1 w-full"
                         >
-                            {needsBootstrap ? "Create admin account" : "Sign in"}
+                            {needsBootstrap
+                                ? "Create admin account"
+                                : mode === "signup"
+                                    ? "Create account"
+                                    : "Sign in"}
                         </Button>
                     </form>
+
+                    {!needsBootstrap && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setMode(mode === "login" ? "signup" : "login");
+                                setError(null);
+                            }}
+                            className="mt-4 w-full text-center text-sm text-blue-600 hover:underline"
+                        >
+                            {mode === "login" ? "Need an account? Sign up" : "Already have an account? Sign in"}
+                        </button>
+                    )}
                 </Card>
             </div>
         </div>

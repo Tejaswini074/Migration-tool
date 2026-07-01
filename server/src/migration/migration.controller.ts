@@ -1,9 +1,12 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import connectionManager from "../database/connectionManager";
 import mappingService from "../Mapping/mapping.service";
 import migrationService from "./migration.service";
+import runHistoryService from "./runHistory.service";
+import { buildCsvReport, buildPdfReport } from "./report.service";
+import { AuthenticatedRequest } from "../auth/auth.middleware";
 
-export const runMigration = async (req: Request, res: Response): Promise<void> => {
+export const runMigration = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
 
@@ -39,11 +42,16 @@ export const runMigration = async (req: Request, res: Response): Promise<void> =
             return;
         }
 
-        const runId = migrationService.start({
+        const runId = await migrationService.start({
             project,
             sourceConnection,
             destinationConnection,
-            metadataConnection
+            metadataConnection,
+            startedBy: {
+                userId: req.user!.userId,
+                name: req.user!.name,
+                email: req.user!.email
+            }
         });
 
         res.json({
@@ -60,10 +68,9 @@ export const runMigration = async (req: Request, res: Response): Promise<void> =
 
 };
 
-export const getMigrationStatus = async (req: Request, res: Response): Promise<void> => {
+export const getMigrationStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
-
         const runId = String(req.params.runId);
         const run = migrationService.getStatus(runId);
 
@@ -74,7 +81,6 @@ export const getMigrationStatus = async (req: Request, res: Response): Promise<v
             });
             return;
         }
-
         res.json({
             success: true,
             run
@@ -85,6 +91,70 @@ export const getMigrationStatus = async (req: Request, res: Response): Promise<v
             success: false,
             message: err.message
         });
+    }
+
+};
+
+export const getMigrationHistory = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+
+    try {
+        const connectionId = String(req.params.connectionId);
+        const connection = connectionManager.get(connectionId);
+
+        if (!connection) {
+            res.status(404).json({ success: false, message: "Connection Not Found" });
+            return;
+        }
+        const runs = await runHistoryService.listRuns(connection, {
+            userId: req.user!.userId,
+            role: req.user!.role
+        });
+        res.json({ success: true, runs });
+
+    } catch (err: any) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+
+};
+
+export const downloadReport = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+
+    try {
+        const connectionId = String(req.params.connectionId);
+        const runId = String(req.params.runId);
+        const format = String(req.query.format || "csv").toLowerCase();
+
+        const connection = connectionManager.get(connectionId);
+        if (!connection) {
+            res.status(404).json({ success: false, message: "Connection Not Found" });
+            return;
+        }
+        const run = await runHistoryService.getRun(connection, runId);
+        if (!run) {
+            res.status(404).json({ success: false, message: "Migration Run Not Found" });
+            return;
+        }
+        if (req.user!.role !== "admin" && run.started_by_user_id !== req.user!.userId) {
+            res.status(403).json({ success: false, message: "You cannot access another user's report" });
+            return;
+        }
+
+        const filenameBase = `migration-report-${run.run_id}`;
+
+        if (format === "pdf") {
+            const buffer = await buildPdfReport(run);
+            res.setHeader("Content-Type", "application/pdf");
+            res.setHeader("Content-Disposition", `attachment; filename="${filenameBase}.pdf"`);
+            res.send(buffer);
+            return;
+        }
+
+        const csv = buildCsvReport(run);
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="${filenameBase}.csv"`);
+        res.send(csv);
+    } catch (err: any) {
+        res.status(500).json({ success: false, message: err.message });
     }
 
 };

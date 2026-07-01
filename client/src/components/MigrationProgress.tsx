@@ -1,8 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Loader2, Rocket } from "lucide-react";
-import { getMigrationStatus, runMigration } from "../api/dataBridgeApi";
-import { extractErrorMessage } from "../api/client";
-import type { ConnectionState, MigrationRun, TableRunStatus } from "../api/types";
+import { AlertCircle, CheckCircle2, Download, Loader2, Rocket } from "lucide-react";
+import { useMigrationRun } from "../hooks/useMigrationRun";
+import type { ConnectionState, TableRunStatus } from "../types";
 import Card from "./ui/Card";
 import Button from "./ui/Button";
 import Badge from "./ui/Badge";
@@ -30,52 +28,12 @@ const statusTone: Record<TableRunStatus, "slate" | "blue" | "green" | "red"> = {
     skipped: "slate"
 };
 
-export default function MigrationStep({ projectId, source, destination }: Props) {
-    const [run, setRun] = useState<MigrationRun | null>(null);
-    const [error, setError] = useState<string | null>(null);
-    const [starting, setStarting] = useState(false);
-    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-    useEffect(() => {
-        return () => {
-            if (pollRef.current) clearInterval(pollRef.current);
-        };
-    }, []);
-
-    const startPolling = (runId: string) => {
-        pollRef.current = setInterval(async () => {
-            try {
-                const latest = await getMigrationStatus(runId);
-                setRun(latest);
-                if (latest.status !== "running" && pollRef.current) {
-                    clearInterval(pollRef.current);
-                }
-            } catch (err) {
-                setError(extractErrorMessage(err));
-                if (pollRef.current) clearInterval(pollRef.current);
-            }
-        }, 1500);
-    };
-
-    const handleStart = async () => {
-        setStarting(true);
-        setError(null);
-        try {
-            const runId = await runMigration({
-                projectId,
-                sourceConnectionId: source.connectionId,
-                destinationConnectionId: destination.connectionId,
-                metadataConnectionId: destination.connectionId
-            });
-            const initial = await getMigrationStatus(runId);
-            setRun(initial);
-            if (initial.status === "running") startPolling(runId);
-        } catch (err) {
-            setError(extractErrorMessage(err));
-        } finally {
-            setStarting(false);
-        }
-    };
+export default function MigrationProgress({ projectId, source, destination }: Props) {
+    const { run, error, starting, handleStart, downloading, downloadReport } = useMigrationRun(
+        projectId,
+        source,
+        destination
+    );
 
     return (
         <div className="flex flex-col gap-5">
@@ -102,10 +60,34 @@ export default function MigrationStep({ projectId, source, destination }: Props)
                 <Card>
                     <div className="mb-5 flex items-center justify-between">
                         <h3 className="text-sm font-semibold text-slate-900">Migration progress</h3>
-                        <Badge tone={run.status === "completed" ? "green" : run.status === "failed" ? "red" : "blue"}>
-                            {run.status === "running" && <Loader2 className="h-3 w-3 animate-spin" />}
-                            {statusLabel[run.status] ?? run.status}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                            <Badge tone={run.status === "completed" ? "green" : run.status === "failed" ? "red" : "blue"}>
+                                {run.status === "running" && <Loader2 className="h-3 w-3 animate-spin" />}
+                                {statusLabel[run.status] ?? run.status}
+                            </Badge>
+                            {run.status !== "running" && (
+                                <>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        loading={downloading === "csv"}
+                                        onClick={() => downloadReport("csv")}
+                                    >
+                                        <Download className="h-3.5 w-3.5" />
+                                        CSV
+                                    </Button>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        loading={downloading === "pdf"}
+                                        onClick={() => downloadReport("pdf")}
+                                    >
+                                        <Download className="h-3.5 w-3.5" />
+                                        PDF
+                                    </Button>
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex flex-col gap-5">

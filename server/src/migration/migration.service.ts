@@ -2,6 +2,7 @@ import mysql from "mysql2/promise";
 import { v4 as uuid } from "uuid";
 import schemaService from "../schema/schema.service";
 import mappingService from "../Mapping/mapping.service";
+import runHistoryService from "./runHistory.service";
 
 const BATCH_SIZE = 500;
 
@@ -19,6 +20,7 @@ interface TableRunState {
 
 interface RunState {
     runId: string;
+    dbId: number;
     projectId: number;
     status: "running" | "completed" | "failed";
     startedAt: string;
@@ -26,11 +28,18 @@ interface RunState {
     tables: TableRunState[];
 }
 
+interface StartedBy {
+    userId: number;
+    name: string;
+    email: string;
+}
+
 interface StartParams {
     project: any;
-    sourceConnection: mysql.Connection;
-    destinationConnection: mysql.Connection;
-    metadataConnection: mysql.Connection;
+    sourceConnection: mysql.Pool;
+    destinationConnection: mysql.Pool;
+    metadataConnection: mysql.Pool;
+    startedBy: StartedBy;
 }
 
 const applyTransform = (value: any, rule?: string | null) => {
@@ -48,10 +57,7 @@ const applyTransform = (value: any, rule?: string | null) => {
     }
 };
 
-const getPrimaryKeyColumn = async (
-    connection: mysql.Connection,
-    tableName: string
-): Promise<string | null> => {
+const getPrimaryKeyColumn = async (connection: mysql.Pool, tableName: string): Promise<string | null> => {
 
     const [rows]: any = await connection.query(
         `SHOW KEYS FROM \`${tableName}\` WHERE Key_name = 'PRIMARY'`
@@ -69,7 +75,7 @@ class MigrationService {
         return this.runs.get(runId);
     }
 
-    start(params: StartParams): string {
+    async start(params: StartParams): Promise<string> {
 
         const runId = uuid();
 
@@ -83,8 +89,23 @@ class MigrationService {
             error: null
         }));
 
+        const dbId = await runHistoryService.createRun(params.metadataConnection, {
+            runId,
+            projectId: params.project.id,
+            projectName: params.project.project_name,
+            sourceDatabase: params.project.source_database,
+            destinationDatabase: params.project.destination_database,
+            startedBy: params.startedBy,
+            tables: tables.map((t) => ({
+                tableMappingId: t.tableMappingId,
+                sourceTable: t.sourceTable,
+                destinationTable: t.destinationTable
+            }))
+        });
+
         const runState: RunState = {
             runId,
+            dbId,
             projectId: params.project.id,
             status: "running",
             startedAt: new Date().toISOString(),
@@ -94,19 +115,30 @@ class MigrationService {
 
         this.runs.set(runId, runState);
 
-        this.execute(runState, params).catch((err) => {
+        this.execute(runState, params).catch(async (err) => {
             runState.status = "failed";
             runState.finishedAt = new Date().toISOString();
+
+            for (const table of runState.tables) {
+                if (table.status === "pending" || table.status === "running") {
+                    table.status = "failed";
+                    table.error = err.message || "Migration stopped unexpectedly";
+                }
+            }
+
             console.error("Migration run failed unexpectedly:", err);
+
+            try {
+                await runHistoryService.finishRun(params.metadataConnection, runState.dbId, "failed");
+            } catch (persistErr) {
+                console.error("Failed to persist run failure:", persistErr);
+            }
         });
 
         return runId;
     }
 
-    private async orderTables(
-        project: any,
-        destinationConnection: mysql.Connection
-    ) {
+    private async orderTables(project: any, destinationConnection: mysql.Pool) {
 
         const tables = project.tables;
         const destNames = new Set(tables.map((t: any) => t.destination_table));
@@ -162,14 +194,16 @@ class MigrationService {
         let anyFailed = false;
 
         for (const table of orderedTables) {
+            const tableState = runState.tables.find((t) => t.tableMappingId === table.id);
+            if (!tableState) {
+                console.error(`Migration: no run-state entry for table_mapping ${table.id}, skipping`);
+                continue;
+            }
 
-            const tableState = runState.tables.find((t) => t.tableMappingId === table.id)!;
             tableState.status = "running";
 
             try {
-
                 const sourcePkColumn = await getPrimaryKeyColumn(sourceConnection, table.source_table);
-
                 const [countRows]: any = await sourceConnection.query(
                     `SELECT COUNT(*) total FROM \`${table.source_table}\``
                 );
@@ -177,11 +211,11 @@ class MigrationService {
                 tableState.totalRows = totalRows;
 
                 await mappingService.updateTableMappingStatus(
-                    metadataConnection,
-                    table.id,
-                    "Running",
-                    0,
-                    totalRows
+                    metadataConnection, table.id, "Running",
+                    0, totalRows
+                );
+                await runHistoryService.updateRunTable(
+                    metadataConnection, runState.dbId, table.id, "running", 0, totalRows
                 );
 
                 const destinationIdMap = new Map<any, any>();
@@ -198,9 +232,7 @@ class MigrationService {
                     if (rows.length === 0) break;
 
                     for (const row of rows) {
-
                         const destRow: Record<string, any> = {};
-
                         for (const col of table.columns) {
 
                             let value = row[col.source_column];
@@ -212,7 +244,6 @@ class MigrationService {
                                     value = lookupMap.get(value);
                                 }
                             }
-
                             destRow[col.destination_column] = value;
                         }
 
@@ -229,7 +260,6 @@ class MigrationService {
                             const newId = insertResult.insertId || row[sourcePkColumn];
                             destinationIdMap.set(row[sourcePkColumn], newId);
                         }
-
                         tableState.migratedRows++;
                     }
 
@@ -239,6 +269,9 @@ class MigrationService {
                         "Running",
                         tableState.migratedRows,
                         totalRows
+                    );
+                    await runHistoryService.updateRunTable(
+                        metadataConnection, runState.dbId, table.id, "running", tableState.migratedRows, totalRows
                     );
 
                     offset += BATCH_SIZE;
@@ -252,6 +285,9 @@ class MigrationService {
                     tableState.migratedRows,
                     totalRows,
                     null
+                );
+                await runHistoryService.updateRunTable(
+                    metadataConnection, runState.dbId, table.id, "completed", tableState.migratedRows, totalRows
                 );
 
             } catch (err: any) {
@@ -267,11 +303,16 @@ class MigrationService {
                     tableState.totalRows,
                     err.message
                 );
+                await runHistoryService.updateRunTable(
+                    metadataConnection, runState.dbId, table.id, "failed",
+                    tableState.migratedRows, tableState.totalRows, err.message
+                );
             }
         }
-
         runState.status = anyFailed ? "failed" : "completed";
         runState.finishedAt = new Date().toISOString();
+
+        await runHistoryService.finishRun(metadataConnection, runState.dbId, runState.status);
     }
 
 }

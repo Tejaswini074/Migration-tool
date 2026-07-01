@@ -1,7 +1,13 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { getMe, login as loginApi, registerFirstAdmin as registerApi, getBootstrapStatus } from "../api/authApi";
-import { clearStoredToken, setStoredToken, getStoredToken } from "../api/client";
-import type { AuthUser } from "../api/types";
+import {
+    getMe,
+    login as loginApi,
+    registerFirstAdmin as registerApi,
+    signup as signupApi,
+    getBootstrapStatus
+} from "../services/authApi";
+import { clearStoredToken, setStoredToken, getStoredToken } from "../services/client";
+import type { AuthUser } from "../types";
 
 interface AuthContextValue {
     user: AuthUser | null;
@@ -9,6 +15,7 @@ interface AuthContextValue {
     needsBootstrap: boolean;
     login: (email: string, password: string) => Promise<void>;
     registerFirstAdmin: (name: string, email: string, password: string) => Promise<void>;
+    signup: (name: string, email: string, password: string) => Promise<void>;
     logout: () => void;
 }
 
@@ -55,13 +62,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setNeedsBootstrap(false);
     };
 
+    const signup = async (name: string, email: string, password: string) => {
+        const result = await signupApi({ name, email, password });
+        setStoredToken(result.token);
+        setUser(result.user);
+    };
+
     const logout = () => {
         clearStoredToken();
         setUser(null);
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, needsBootstrap, login, registerFirstAdmin, logout }}>
+        <AuthContext.Provider
+            value={{ user, loading, needsBootstrap, login, registerFirstAdmin, signup, logout }}
+        >
             {children}
         </AuthContext.Provider>
     );

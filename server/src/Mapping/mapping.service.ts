@@ -2,7 +2,7 @@ import mysql from "mysql2/promise";
 
 class MappingService {
 
-    private async ensureTables(connection: mysql.Connection) {
+    private async ensureTables(connection: mysql.Pool) {
 
         await connection.query(`
             CREATE TABLE IF NOT EXISTS migration_projects (
@@ -42,7 +42,7 @@ class MappingService {
         `);
     }
 
-    async createProject(connection: mysql.Connection, data: any) {
+    async createProject(connection: mysql.Pool, data: any) {
 
         await this.ensureTables(connection);
 
@@ -65,7 +65,7 @@ class MappingService {
         return result.insertId;
     }
 
-    async getProjects(connection: mysql.Connection) {
+    async getProjects(connection: mysql.Pool) {
         await this.ensureTables(connection);
         const [rows]: any = await connection.query(
             "SELECT * FROM migration_projects ORDER BY created_at DESC"
@@ -74,7 +74,7 @@ class MappingService {
         return rows;
     }
 
-    async getProjectDetail(connection: mysql.Connection, projectId: number) {
+    async getProjectDetail(connection: mysql.Pool, projectId: number) {
         await this.ensureTables(connection);
 
         const [projects]: any = await connection.query(
@@ -99,7 +99,7 @@ class MappingService {
         return { ...projects[0], tables };
     }
 
-    async saveTableMapping(connection: mysql.Connection, data: any) {
+    async saveTableMapping(connection: mysql.Pool, data: any) {
 
         await this.ensureTables(connection);
 
@@ -124,7 +124,7 @@ class MappingService {
         return result.insertId;
     }
 
-    async saveColumnMapping(connection: mysql.Connection, data: any) {
+    async saveColumnMapping(connection: mysql.Pool, data: any) {
 
         await this.ensureTables(connection);
 
@@ -154,7 +154,7 @@ class MappingService {
     }
 
     async updateTableMappingStatus(
-        connection: mysql.Connection,
+        connection: mysql.Pool,
         tableMappingId: number,
         status: string,
         migratedRows?: number,

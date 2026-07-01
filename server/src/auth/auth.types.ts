@@ -11,6 +11,7 @@ export interface AppUser {
 
 export interface AuthTokenPayload {
     userId: number;
+    name: string;
     email: string;
     role: UserRole;
 }
