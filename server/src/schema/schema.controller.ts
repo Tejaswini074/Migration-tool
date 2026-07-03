@@ -1,12 +1,13 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import connectionManager from "../database/connectionManager";
 import schemaService from "./schema.service";
+import { AuthenticatedRequest } from "../auth/auth.middleware";
 
-export const getTables = async (req: Request, res: Response): Promise<void> => {
+export const getTables = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
         const connectionId = String(req.params.connectionId);
-        const connection = connectionManager.get(connectionId);
+        const connection = connectionManager.getOwned(connectionId, req.user!.userId, req.user!.role === "admin");
         if (!connection) {
             res.status(404).json({
                 success: false,
@@ -30,13 +31,13 @@ export const getTables = async (req: Request, res: Response): Promise<void> => {
     }
 };
 
-export const getColumns = async (req: Request, res: Response): Promise<void> => {
+export const getColumns = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
 
         const connectionId = String(req.params.connectionId);
         const tableName = String(req.params.tableName);
-        const connection = connectionManager.get(connectionId);
+        const connection = connectionManager.getOwned(connectionId, req.user!.userId, req.user!.role === "admin");
 
         if (!connection) {
 
@@ -63,12 +64,12 @@ export const getColumns = async (req: Request, res: Response): Promise<void> => 
 };
 
 
-export const getForeignKeys = async (req: Request, res: Response): Promise<void> => {
+export const getForeignKeys = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
         const connectionId = String(req.params.connectionId);
         const tableName = String(req.params.tableName);
-        const connection = connectionManager.get(connectionId);
+        const connection = connectionManager.getOwned(connectionId, req.user!.userId, req.user!.role === "admin");
 
         if (!connection) {
             res.status(404).json({
@@ -93,11 +94,11 @@ export const getForeignKeys = async (req: Request, res: Response): Promise<void>
     }
 };
 
-export const getDatabaseSchema = async (req: Request, res: Response): Promise<void> => {
+export const getDatabaseSchema = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
 
         const connectionId = String(req.params.connectionId);
-        const connection = connectionManager.get(connectionId);
+        const connection = connectionManager.getOwned(connectionId, req.user!.userId, req.user!.role === "admin");
         if (!connection) {
 
             res.status(404).json({

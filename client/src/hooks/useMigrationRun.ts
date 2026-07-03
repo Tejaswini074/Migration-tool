@@ -31,7 +31,7 @@ export function useMigrationRun(projectId: number, source: ConnectionState, dest
         }, 1500);
     };
 
-    const handleStart = async (batchSize?: number) => {
+    const handleStart = async (batchSize?: number, mode?: "full" | "incremental") => {
         setStarting(true);
         setError(null);
         try {
@@ -39,7 +39,8 @@ export function useMigrationRun(projectId: number, source: ConnectionState, dest
                 projectId,
                 sourceConnectionId: source.connectionId,
                 destinationConnectionId: destination.connectionId,
-                batchSize
+                batchSize,
+                mode
             });
             const initial = await getMigrationStatus(runId);
             setRun(initial);

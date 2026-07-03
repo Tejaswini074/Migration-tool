@@ -1,9 +1,11 @@
 import { useState, type ChangeEvent } from "react";
 import { connectDatabase, getDatabaseSchema } from "../services/dataBridgeApi";
 import { extractErrorMessage } from "../services/client";
-import type { ConnectionState } from "../types";
+import type { ConnectionState, ConnectorType } from "../types";
 
-const initialForm = { host: "localhost", port: "3306", user: "root", password: "", database: "" };
+const defaultPort: Record<ConnectorType, string> = { mysql: "3306", postgres: "5432" };
+
+const initialForm = { host: "localhost", port: defaultPort.mysql, user: "root", password: "", database: "", type: "mysql" as ConnectorType };
 
 export function useConnection(onConnected: (state: ConnectionState) => void) {
     const [form, setForm] = useState(initialForm);
@@ -12,6 +14,10 @@ export function useConnection(onConnected: (state: ConnectionState) => void) {
 
     const handleChange = (field: keyof typeof form) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm((f) => ({ ...f, [field]: e.target.value }));
+    };
+
+    const setType = (type: ConnectorType) => {
+        setForm((f) => ({ ...f, type, port: f.port === defaultPort[f.type] ? defaultPort[type] : f.port }));
     };
 
     const connect = async () => {
@@ -25,6 +31,7 @@ export function useConnection(onConnected: (state: ConnectionState) => void) {
                 database: result.database,
                 host: form.host,
                 port: form.port,
+                type: result.type,
                 schema
             });
         } catch (err) {
@@ -34,5 +41,5 @@ export function useConnection(onConnected: (state: ConnectionState) => void) {
         }
     };
 
-    return { form, handleChange, loading, error, connect };
+    return { form, handleChange, setType, loading, error, connect };
 }

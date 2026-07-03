@@ -1,11 +1,16 @@
-import { Sparkles } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, Columns3, Eye, Sparkles } from "lucide-react";
 import { useMapping } from "../hooks/useMapping";
-import type { ConnectionState } from "../types";
+import { previewMapping } from "../services/dataBridgeApi";
+import { extractErrorMessage } from "../services/client";
+import { cn } from "../lib/cn";
+import type { ColumnMappingDraft, ConnectionState } from "../types";
 import Card from "./ui/Card";
 import Input from "./ui/Input";
 import Select from "./ui/Select";
 import Button from "./ui/Button";
 import Badge from "./ui/Badge";
+import TransformEditor from "./TransformEditor";
 
 interface Props {
     source: ConnectionState;
@@ -30,6 +35,8 @@ export default function MappingReview({ source, destination, onProjectCreated }:
         acceptedTables,
         handleDestinationTableChange,
         handleColumnChange,
+        handleTransformChange,
+        handleHighWaterColumnChange,
         handleSave
     } = useMapping(source, destination, onProjectCreated);
 
@@ -61,9 +68,14 @@ export default function MappingReview({ source, destination, onProjectCreated }:
                 return (
                     <Card key={table.tableName}>
                         <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                                <h4 className="text-sm font-semibold text-slate-900 dark:text-white">{table.tableName}</h4>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">{table.totalRows} row(s)</p>
+                            <div className="flex items-center gap-3">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-500/10">
+                                    <Columns3 className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-semibold text-slate-900 dark:text-white">{table.tableName}</h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">{table.totalRows} row(s)</p>
+                                </div>
                             </div>
 
                             <div className="flex items-center gap-3">
@@ -138,28 +150,41 @@ export default function MappingReview({ source, destination, onProjectCreated }:
                                                         </Select>
                                                     </td>
                                                     <td className="px-4 py-2">
-                                                        <Select
+                                                        <TransformEditor
                                                             value={col.transformRule}
-                                                            onChange={(e) =>
-                                                                handleColumnChange(
-                                                                    table.tableName,
-                                                                    i,
-                                                                    "transformRule",
-                                                                    e.target.value
-                                                                )
+                                                            onChange={(rule) =>
+                                                                handleTransformChange(table.tableName, i, rule)
                                                             }
-                                                        >
-                                                            <option value="">None</option>
-                                                            <option value="uppercase">Uppercase</option>
-                                                            <option value="lowercase">Lowercase</option>
-                                                            <option value="trim">Trim</option>
-                                                        </Select>
+                                                        />
                                                     </td>
                                                 </tr>
                                             );
                                         })}
                                     </tbody>
                                 </table>
+                            </div>
+                        )}
+
+                        {draft?.destinationTable && draft.columns.some((c) => c.destinationColumn) && (
+                            <PreviewPanel
+                                sourceConnectionId={source.connectionId}
+                                tableName={table.tableName}
+                                columns={draft.columns.filter((c) => c.destinationColumn)}
+                            />
+                        )}
+
+                        {draft?.destinationTable && (
+                            <div className="mt-3 max-w-56">
+                                <Select
+                                    label="Track changes using (for incremental sync)"
+                                    value={draft.highWaterColumn ?? ""}
+                                    onChange={(e) => handleHighWaterColumnChange(table.tableName, e.target.value)}
+                                >
+                                    <option value="">-- Not tracked --</option>
+                                    {table.columns.map((c) => (
+                                        <option key={c.Field} value={c.Field}>{c.Field}</option>
+                                    ))}
+                                </Select>
                             </div>
                         )}
                     </Card>
@@ -175,6 +200,107 @@ export default function MappingReview({ source, destination, onProjectCreated }:
                     Create Project & Save Mapping ({acceptedTables.length} table(s))
                 </Button>
             </div>
+        </div>
+    );
+}
+
+function PreviewPanel({
+    sourceConnectionId,
+    tableName,
+    columns
+}: {
+    sourceConnectionId: string;
+    tableName: string;
+    columns: ColumnMappingDraft[];
+}) {
+    const [open, setOpen] = useState(false);
+    const [rows, setRows] = useState<Record<string, { source: unknown; transformed: unknown }>[] | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const toggle = async () => {
+        const next = !open;
+        setOpen(next);
+        if (next && rows === null) {
+            setLoading(true);
+            setError(null);
+            try {
+                setRows(
+                    await previewMapping({
+                        sourceConnectionId,
+                        tableName,
+                        columns: columns.map((c) => ({
+                            sourceColumn: c.sourceColumn,
+                            destinationColumn: c.destinationColumn,
+                            transformRule: c.transformRule ? JSON.stringify(c.transformRule) : null
+                        }))
+                    })
+                );
+            } catch (err) {
+                setError(extractErrorMessage(err));
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
+
+    return (
+        <div className="mt-3">
+            <button
+                type="button"
+                onClick={toggle}
+                className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+            >
+                <Eye className="h-3.5 w-3.5" />
+                Preview sample rows
+                <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
+            </button>
+
+            {open && (
+                <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200 dark:border-white/10">
+                    {loading && <p className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">Loading sample...</p>}
+                    {error && <p className="px-3 py-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
+                    {rows && rows.length === 0 && (
+                        <p className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">No rows to preview.</p>
+                    )}
+                    {rows && rows.length > 0 && (
+                        <table className="w-full text-xs">
+                            <thead className="bg-slate-50 dark:bg-white/5">
+                                <tr>
+                                    {columns.map((c) => (
+                                        <th key={c.destinationColumn} className="px-3 py-1.5 text-left font-medium text-slate-500 dark:text-slate-400">
+                                            {c.destinationColumn}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                                {rows.map((row, i) => (
+                                    <tr key={i}>
+                                        {columns.map((c) => {
+                                            const cell = row[c.destinationColumn];
+                                            const changed = cell && cell.source !== cell.transformed;
+                                            return (
+                                                <td key={c.destinationColumn} className="px-3 py-1.5 text-slate-600 dark:text-slate-400">
+                                                    {changed ? (
+                                                        <span>
+                                                            <span className="text-slate-400 line-through dark:text-slate-600">{String(cell.source)}</span>
+                                                            {" → "}
+                                                            <span className="font-medium text-slate-800 dark:text-slate-200">{String(cell.transformed)}</span>
+                                                        </span>
+                                                    ) : (
+                                                        String(cell?.transformed ?? "")
+                                                    )}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

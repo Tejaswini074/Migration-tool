@@ -1,4 +1,5 @@
 import { getAppDatabase } from "../config/appDatabase";
+import mappingService from "../Mapping/mapping.service";
 
 interface StartedBy {
     userId: number;
@@ -19,6 +20,18 @@ export interface FailedRowInput {
     errorMessage: string;
     rowSnapshot: string;
 }
+
+interface Requester {
+    userId: number;
+    role: string;
+}
+
+export const canAccessRun = (run: any, requester: Requester) =>
+    requester.role === "admin" || run.started_by_user_id === requester.userId;
+
+export type RunAccessResult =
+    | { ok: true; run: any }
+    | { ok: false; status: 404 | 403; message: string };
 
 class RunHistoryService {
 
@@ -225,6 +238,78 @@ class RunHistoryService {
         );
 
         return { ...runs[0], tables };
+    }
+
+    async getStatsForUser(requester: Requester) {
+        await this.ensureTables();
+        const db = getAppDatabase();
+        const isAdmin = requester.role === "admin";
+
+        const runsFilter = isAdmin ? "1=1" : "started_by_user_id = ?";
+        const joinedFilter = isAdmin ? "1=1" : "mr.started_by_user_id = ?";
+        const params = isAdmin ? [] : [requester.userId];
+
+        const projects = await mappingService.getProjects(requester);
+
+        const [[runStats]]: any = await db.query(
+            `SELECT
+                COUNT(*) AS totalRuns,
+                SUM(CASE WHEN status IN ('completed','completed_with_errors') THEN 1 ELSE 0 END) AS successfulRuns
+             FROM migration_runs WHERE ${runsFilter}`,
+            params
+        );
+
+        const [[rowStats]]: any = await db.query(
+            `SELECT COALESCE(SUM(mrt.migrated_rows), 0) AS totalRowsMigrated
+             FROM migration_run_tables mrt
+             JOIN migration_runs mr ON mr.id = mrt.migration_run_id
+             WHERE ${joinedFilter}`,
+            params
+        );
+
+        const [dailyRows]: any = await db.query(
+            `SELECT DATE(mr.started_at) AS day, COALESCE(SUM(mrt.migrated_rows), 0) AS rowsMigrated
+             FROM migration_runs mr
+             LEFT JOIN migration_run_tables mrt ON mrt.migration_run_id = mr.id
+             WHERE ${joinedFilter} AND mr.started_at >= DATE_SUB(CURDATE(), INTERVAL 13 DAY)
+             GROUP BY DATE(mr.started_at)
+             ORDER BY day ASC`,
+            params
+        );
+
+        const [recentRuns]: any = await db.query(
+            `SELECT run_id, project_name, source_database, destination_database, status, started_at, finished_at
+             FROM migration_runs WHERE ${runsFilter} ORDER BY started_at DESC LIMIT 5`,
+            params
+        );
+
+        const totalRuns = Number(runStats.totalRuns) || 0;
+        const successfulRuns = Number(runStats.successfulRuns) || 0;
+
+        return {
+            totalProjects: projects.length,
+            totalRuns,
+            successRate: totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : 0,
+            totalRowsMigrated: Number(rowStats.totalRowsMigrated) || 0,
+            dailyRowsMigrated: dailyRows.map((d: any) => ({
+                date: new Date(d.day).toISOString().slice(0, 10),
+                rows: Number(d.rowsMigrated)
+            })),
+            recentRuns
+        };
+    }
+
+    /** Same load-then-authorize convenience as mapping.service's getAccessibleProject. */
+    async getAccessibleRun(runId: string, requester: Requester): Promise<RunAccessResult> {
+        const run = await this.getRun(runId);
+
+        if (!run) {
+            return { ok: false, status: 404, message: "Migration Run Not Found" };
+        }
+        if (!canAccessRun(run, requester)) {
+            return { ok: false, status: 403, message: "You cannot access another user's run" };
+        }
+        return { ok: true, run };
     }
 
 }

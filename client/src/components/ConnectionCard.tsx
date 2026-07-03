@@ -14,7 +14,7 @@ interface Props {
 }
 
 export default function ConnectionCard({ label, connection, onConnected }: Props) {
-    const { form, handleChange, loading, error, connect } = useConnection(onConnected);
+    const { form, handleChange, setType, loading, error, connect } = useConnection(onConnected);
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
     const toggleTable = (tableName: string) => {
@@ -34,7 +34,12 @@ export default function ConnectionCard({ label, connection, onConnected }: Props
                         <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-emerald-400" />
                     </div>
                     <div>
-                        <p className="text-sm font-semibold text-slate-900 dark:text-white">{label}</p>
+                        <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white">{label}</p>
+                            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-white/10 dark:text-slate-400">
+                                {connection.type}
+                            </span>
+                        </div>
                         <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
                             <span className="font-medium">{connection.database}</span> @ {connection.host}:
                             {connection.port}
@@ -98,9 +103,29 @@ export default function ConnectionCard({ label, connection, onConnected }: Props
 
     return (
         <Card>
-            <div className="mb-4 flex items-center gap-2">
-                <Server className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+            <div className="mb-4 flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-500/10">
+                    <Server className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
+                </div>
                 <p className="text-sm font-semibold text-slate-900 dark:text-white">{label}</p>
+            </div>
+
+            <div className="mb-3 inline-flex rounded-lg bg-slate-100 p-1 text-sm dark:bg-white/5">
+                {(["mysql", "postgres"] as const).map((t) => (
+                    <button
+                        key={t}
+                        type="button"
+                        onClick={() => setType(t)}
+                        className={cn(
+                            "rounded-md px-3 py-1 font-medium transition-colors",
+                            form.type === t
+                                ? "bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white"
+                                : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                        )}
+                    >
+                        {t === "mysql" ? "MySQL" : "PostgreSQL"}
+                    </button>
+                ))}
             </div>
 
             <div className="flex flex-col gap-3">

@@ -1,3 +1,5 @@
+import { IConnector } from "../connectors/types";
+
 export interface TableInfo {
     tableName: string;
     totalRows: number;
@@ -5,6 +7,28 @@ export interface TableInfo {
 }
 
 class RecommendationService {
+
+    private async summarizeSchema(connector: IConnector): Promise<TableInfo[]> {
+        const tables = await connector.getTables();
+        const summary: TableInfo[] = [];
+
+        for (const table of tables) {
+            summary.push({
+                tableName: table.tableName,
+                totalRows: table.totalRows,
+                columns: await connector.getColumns(table.tableName)
+            });
+        }
+        return summary;
+    }
+
+    async compareSchemas(source: IConnector, destination: IConnector) {
+        const [sourceSchema, destinationSchema] = await Promise.all([
+            this.summarizeSchema(source),
+            this.summarizeSchema(destination)
+        ]);
+        return this.recommendTables(sourceSchema, destinationSchema);
+    }
     private tableSimilarity(source: string, destination: string): number {
         source = source.toLowerCase();
         destination = destination.toLowerCase();

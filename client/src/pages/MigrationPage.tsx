@@ -4,6 +4,7 @@ import MappingReview from "../components/MappingReview";
 import ValidationReport from "../components/ValidationReport";
 import MigrationProgress from "../components/MigrationProgress";
 import StepIndicator, { type WizardStep } from "../components/StepIndicator";
+import Button from "../components/ui/Button";
 import type { ConnectionState } from "../types";
 
 export default function MigrationPage() {
@@ -29,13 +30,9 @@ export default function MigrationPage() {
                         />
                     </div>
                     <div className="mt-6 flex justify-end">
-                        <button
-                            disabled={!bothConnected}
-                            onClick={() => setStep("mapping")}
-                            className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-indigo-300 disabled:shadow-none dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:disabled:bg-indigo-500/30"
-                        >
+                        <Button disabled={!bothConnected} onClick={() => setStep("mapping")}>
                             Continue to Mapping
-                        </button>
+                        </Button>
                     </div>
                 </>
             )}

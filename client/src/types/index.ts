@@ -37,11 +37,14 @@ export interface TableSchema {
     foreignKeys: ForeignKeyInfo[];
 }
 
+export type ConnectorType = "mysql" | "postgres";
+
 export interface ConnectionState {
     connectionId: string;
     database: string;
     host: string;
     port: string;
+    type: ConnectorType;
     schema: TableSchema[];
 }
 
@@ -52,18 +55,34 @@ export interface TableRecommendation {
     reason: string[];
 }
 
-export type TransformRule = "" | "uppercase" | "lowercase" | "trim";
+export type TransformType =
+    | "uppercase"
+    | "lowercase"
+    | "trim"
+    | "default"
+    | "cast_number"
+    | "cast_string"
+    | "date_format"
+    | "regex_replace";
+
+export interface TransformRule {
+    type: TransformType;
+    value?: string;
+    pattern?: string;
+    replacement?: string;
+}
 
 export interface ColumnMappingDraft {
     sourceColumn: string;
     destinationColumn: string;
-    transformRule: TransformRule;
+    transformRule: TransformRule | null;
 }
 
 export interface TableMappingDraft {
     sourceTable: string;
     destinationTable: string;
     columns: ColumnMappingDraft[];
+    highWaterColumn: string | null;
 }
 
 export type TableRunStatus = "pending" | "running" | "completed" | "completed_with_errors" | "failed" | "skipped";
@@ -147,11 +166,30 @@ export interface ProjectTableMapping {
     migrated_rows: number;
     total_rows: number;
     error_message: string | null;
+    high_water_column: string | null;
+    high_water_value: string | null;
     columns: ProjectColumnMapping[];
 }
 
 export interface MigrationProjectDetail extends MigrationProjectSummary {
     tables: ProjectTableMapping[];
+}
+
+export interface MigrationStats {
+    totalProjects: number;
+    totalRuns: number;
+    successRate: number;
+    totalRowsMigrated: number;
+    dailyRowsMigrated: { date: string; rows: number }[];
+    recentRuns: {
+        run_id: string;
+        project_name: string;
+        source_database: string;
+        destination_database: string;
+        status: "running" | "completed" | "completed_with_errors" | "failed";
+        started_at: string;
+        finished_at: string | null;
+    }[];
 }
 
 export interface MigrationRunSummary {
@@ -167,4 +205,28 @@ export interface MigrationRunSummary {
     status: "running" | "completed" | "completed_with_errors" | "failed";
     started_at: string;
     finished_at: string | null;
+}
+
+export interface ScheduleConnectionConfig {
+    type: ConnectorType;
+    host: string;
+    port: string;
+    user: string;
+    password: string;
+    database: string;
+}
+
+export interface MigrationSchedule {
+    id: number;
+    project_id: number;
+    cron_expression: string;
+    mode: "full" | "incremental";
+    batch_size: number;
+    is_active: 0 | 1;
+    created_by_user_id: number;
+    created_by_name: string;
+    last_run_at: string | null;
+    last_run_status: string | null;
+    next_run_at: string | null;
+    created_at: string;
 }

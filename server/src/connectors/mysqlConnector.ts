@@ -101,6 +101,16 @@ export class MySqlConnector implements IConnector {
         return rows;
     }
 
+    async readBatchSince(
+        tableName: string, column: string, sinceValue: any, limit: number, offset: number
+    ): Promise<Record<string, any>[]> {
+        const [rows]: any = await this.pool.query(
+            `SELECT * FROM \`${tableName}\` WHERE \`${column}\` > ? ORDER BY \`${column}\` LIMIT ? OFFSET ?`,
+            [sinceValue, limit, offset]
+        );
+        return rows;
+    }
+
     async insertRow(tableName: string, row: Record<string, any>): Promise<InsertResult> {
         const columnNames = Object.keys(row);
 

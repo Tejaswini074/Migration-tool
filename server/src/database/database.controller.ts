@@ -1,11 +1,12 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { v4 as uuid } from "uuid";
 import connectionManager from "./connectionManager";
 import { createConnector } from "../connectors/connectorFactory";
 import { ConnectorType } from "../connectors/types";
+import { AuthenticatedRequest } from "../auth/auth.middleware";
 
 
-export const connectDatabase = async (req: Request, res: Response): Promise<void> => {
+export const connectDatabase = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
         const { host, port, user, password, database, type } = req.body;
@@ -26,7 +27,7 @@ export const connectDatabase = async (req: Request, res: Response): Promise<void
         await connector.testConnection();
 
         const connectionId = uuid();
-        connectionManager.add(connectionId, connector);
+        connectionManager.add(connectionId, connector, req.user!.userId);
 
         res.status(200).json({
             success: true,
@@ -45,11 +46,11 @@ export const connectDatabase = async (req: Request, res: Response): Promise<void
     }
 };
 
-export const disconnectDatabase = async (req: Request, res: Response): Promise<void> => {
+export const disconnectDatabase = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
         const connectionId = String(req.params.connectionId);
-        const connector = connectionManager.get(connectionId);
+        const connector = connectionManager.getOwned(connectionId, req.user!.userId, req.user!.role === "admin");
         if (!connector) {
 
             res.status(404).json({
@@ -76,13 +77,10 @@ export const disconnectDatabase = async (req: Request, res: Response): Promise<v
 };
 
 
-export const getActiveConnections = async (req: Request, res: Response): Promise<void> => {
+export const getActiveConnections = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
-        const activeConnections: any[] = [];
-        connectionManager.getAll().forEach((connector, connectionId) => {
-            activeConnections.push({ connectionId, type: connector.type });
-        });
+        const activeConnections = connectionManager.getAllOwned(req.user!.userId, req.user!.role === "admin");
 
         res.status(200).json({
             success: true,

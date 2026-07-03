@@ -1,4 +1,6 @@
 import { getAppDatabase } from "../config/appDatabase";
+import { applyTransform } from "../migration/transform";
+import { IConnector } from "../connectors/types";
 
 interface CreatedBy {
     userId: number;
@@ -13,6 +15,14 @@ interface Requester {
 
 export const canAccessProject = (project: any, requester: Requester) =>
     requester.role === "admin" || project.created_by_user_id === requester.userId;
+
+export type ProjectAccessResult =
+    | { ok: true; project: any }
+    | { ok: false; status: 404 | 403; message: string };
+
+export type TableMappingAccessResult =
+    | { ok: true; tableMapping: any }
+    | { ok: false; status: 404 | 403; message: string };
 
 class MappingService {
 
@@ -57,6 +67,8 @@ class MappingService {
                 FOREIGN KEY (project_id) REFERENCES migration_projects(id) ON DELETE CASCADE
             )
         `);
+        await addColumnIfMissing(`ALTER TABLE table_mapping ADD COLUMN high_water_column VARCHAR(255) DEFAULT NULL`);
+        await addColumnIfMissing(`ALTER TABLE table_mapping ADD COLUMN high_water_value VARCHAR(255) DEFAULT NULL`);
 
         await db.query(`
             CREATE TABLE IF NOT EXISTS column_mapping (
@@ -64,12 +76,14 @@ class MappingService {
                 table_mapping_id INT NOT NULL,
                 source_column VARCHAR(255) NOT NULL,
                 destination_column VARCHAR(255) NOT NULL,
-                transform_rule VARCHAR(50) DEFAULT NULL,
+                transform_rule VARCHAR(500) DEFAULT NULL,
                 lookup_table VARCHAR(255) DEFAULT NULL,
                 lookup_column VARCHAR(255) DEFAULT NULL,
                 FOREIGN KEY (table_mapping_id) REFERENCES table_mapping(id) ON DELETE CASCADE
             )
         `);
+        // transform_rule now stores a small JSON blob (e.g. regex_replace) instead of a bare keyword.
+        await db.query(`ALTER TABLE column_mapping MODIFY COLUMN transform_rule VARCHAR(500) DEFAULT NULL`);
     }
 
     async createProject(
@@ -129,6 +143,51 @@ class MappingService {
         return { ...projects[0], tables };
     }
 
+    /**
+     * Fetches a project and checks the requester can see it in one call, so
+     * every controller that needs "load this project, but only if it's mine"
+     * doesn't have to hand-roll the same not-found/forbidden dance.
+     */
+    async getAccessibleProject(projectId: number, requester: Requester): Promise<ProjectAccessResult> {
+        const project = await this.getProjectDetail(projectId);
+
+        if (!project) {
+            return { ok: false, status: 404, message: "Project Not Found" };
+        }
+        if (!canAccessProject(project, requester)) {
+            return { ok: false, status: 403, message: "You cannot access another user's project" };
+        }
+        return { ok: true, project };
+    }
+
+    /**
+     * Same load-then-authorize convenience as getAccessibleProject, but for endpoints that
+     * only receive a tableMappingId (saveColumnMapping, setHighWaterColumn) - resolves the
+     * owning project via a join so those endpoints can't be used to write into someone else's
+     * table mapping just by guessing a sequential id.
+     */
+    async getAccessibleTableMapping(tableMappingId: number, requester: Requester): Promise<TableMappingAccessResult> {
+        await this.ensureTables();
+        const db = getAppDatabase();
+
+        const [rows]: any = await db.query(
+            `SELECT tm.*, mp.created_by_user_id
+             FROM table_mapping tm
+             JOIN migration_projects mp ON mp.id = tm.project_id
+             WHERE tm.id = ?`,
+            [tableMappingId]
+        );
+        const tableMapping = rows[0];
+
+        if (!tableMapping) {
+            return { ok: false, status: 404, message: "Table mapping not found" };
+        }
+        if (requester.role !== "admin" && tableMapping.created_by_user_id !== requester.userId) {
+            return { ok: false, status: 403, message: "You cannot modify another user's table mapping" };
+        }
+        return { ok: true, tableMapping };
+    }
+
     async saveTableMapping(data: { projectId: number; sourceTable: string; destinationTable: string }) {
 
         await this.ensureTables();
@@ -177,6 +236,44 @@ class MappingService {
         ]);
 
         return result.insertId;
+    }
+
+    /** Reads a small sample of source rows and shows what each column's transform would produce. */
+    async previewMapping(
+        sourceConnection: IConnector,
+        tableName: string,
+        columns: { sourceColumn: string; destinationColumn: string; transformRule?: string | null }[]
+    ) {
+        const sampleRows = await sourceConnection.readBatch(tableName, 5, 0);
+
+        return sampleRows.map((row) => {
+            const preview: Record<string, { source: any; transformed: any }> = {};
+            for (const col of columns) {
+                const sourceValue = row[col.sourceColumn];
+                preview[col.destinationColumn] = {
+                    source: sourceValue,
+                    transformed: applyTransform(sourceValue, col.transformRule)
+                };
+            }
+            return preview;
+        });
+    }
+
+    async setHighWaterColumn(tableMappingId: number, column: string | null) {
+        await this.ensureTables();
+        const db = getAppDatabase();
+        await db.execute(
+            `UPDATE table_mapping SET high_water_column = ? WHERE id = ?`,
+            [column || null, tableMappingId]
+        );
+    }
+
+    async updateTableHighWaterValue(tableMappingId: number, value: string | number) {
+        const db = getAppDatabase();
+        await db.execute(
+            `UPDATE table_mapping SET high_water_value = ? WHERE id = ?`,
+            [String(value), tableMappingId]
+        );
     }
 
     async updateTableMappingStatus(

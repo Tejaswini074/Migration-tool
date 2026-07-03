@@ -1,4 +1,5 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import {
     getBootstrapStatus,
     register,
@@ -14,10 +15,19 @@ import { authenticate, requireRole } from "./auth.middleware";
 
 const router = Router();
 
+// Slows down credential-guessing/brute-force attempts against login and account creation.
+const authAttemptLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: "Too many attempts. Please try again later." }
+});
+
 router.get("/bootstrap-status", getBootstrapStatus);
-router.post("/register", register);
-router.post("/signup", signup);
-router.post("/login", login);
+router.post("/register", authAttemptLimiter, register);
+router.post("/signup", authAttemptLimiter, signup);
+router.post("/login", authAttemptLimiter, login);
 
 router.get("/me", authenticate, me);
 

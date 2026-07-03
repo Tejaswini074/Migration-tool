@@ -1,4 +1,4 @@
-import { Trash2, UserPlus } from "lucide-react";
+import { Trash2, UserPlus, Users } from "lucide-react";
 import { useUsers } from "../hooks/useUsers";
 import { useAuth } from "../hooks/useAuth";
 import type { UserRole } from "../types";
@@ -7,6 +7,7 @@ import Input from "../components/ui/Input";
 import Select from "../components/ui/Select";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
+import { initials } from "../lib/initials";
 
 export default function AdminUsersPage() {
     const { user: currentUser } = useAuth();
@@ -31,8 +32,10 @@ export default function AdminUsersPage() {
     return (
         <div className="flex flex-col gap-5">
             <Card>
-                <div className="mb-4 flex items-center gap-2">
-                    <UserPlus className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                <div className="mb-4 flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-500/10">
+                        <UserPlus className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
+                    </div>
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Add user</h3>
                 </div>
                 <form
@@ -62,24 +65,34 @@ export default function AdminUsersPage() {
             {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
             <Card className="p-0">
-                <h3 className="px-6 pt-6 text-sm font-semibold text-slate-900 dark:text-white">Users</h3>
+                <div className="flex items-center gap-2 px-6 pt-6">
+                    <Users className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Users ({users.length})</h3>
+                </div>
                 {loading ? (
                     <p className="px-6 py-6 text-sm text-slate-500 dark:text-slate-400">Loading...</p>
                 ) : (
                     <table className="mt-4 w-full text-sm">
                         <thead className="border-t border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/5">
                             <tr>
-                                <th className="px-6 py-2 text-left font-medium text-slate-500 dark:text-slate-400">Name</th>
-                                <th className="px-6 py-2 text-left font-medium text-slate-500 dark:text-slate-400">Email</th>
-                                <th className="px-6 py-2 text-left font-medium text-slate-500 dark:text-slate-400">Role</th>
-                                <th className="px-6 py-2 text-left font-medium text-slate-500 dark:text-slate-400">Created</th>
+                                <th className="px-6 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Name</th>
+                                <th className="px-6 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Email</th>
+                                <th className="px-6 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Role</th>
+                                <th className="px-6 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Created</th>
                                 <th className="px-6 py-2"></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                             {users.map((u) => (
-                                <tr key={u.id}>
-                                    <td className="px-6 py-3 text-slate-700 dark:text-slate-300">{u.name}</td>
+                                <tr key={u.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-white/5">
+                                    <td className="px-6 py-3">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-600 dark:bg-white/10 dark:text-slate-300">
+                                                {initials(u.name)}
+                                            </div>
+                                            <span className="font-medium text-slate-800 dark:text-slate-200">{u.name}</span>
+                                        </div>
+                                    </td>
                                     <td className="px-6 py-3 text-slate-500 dark:text-slate-400">{u.email}</td>
                                     <td className="px-6 py-3">
                                         {u.id === currentUser?.id ? (

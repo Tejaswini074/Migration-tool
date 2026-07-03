@@ -1,6 +1,6 @@
 import { Response } from "express";
 import connectionManager from "../database/connectionManager";
-import mappingService, { canAccessProject } from "../Mapping/mapping.service";
+import mappingService from "../Mapping/mapping.service";
 import migrationService from "./migration.service";
 import runHistoryService from "./runHistory.service";
 import { buildCsvReport, buildPdfReport } from "./report.service";
@@ -9,9 +9,10 @@ import { AuthenticatedRequest } from "../auth/auth.middleware";
 export const runMigration = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
-        const { projectId, sourceConnectionId, destinationConnectionId, batchSize } = req.body;
-        const sourceConnection = connectionManager.get(sourceConnectionId);
-        const destinationConnection = connectionManager.get(destinationConnectionId);
+        const { projectId, sourceConnectionId, destinationConnectionId, batchSize, mode } = req.body;
+        const isAdmin = req.user!.role === "admin";
+        const sourceConnection = connectionManager.getOwned(sourceConnectionId, req.user!.userId, isAdmin);
+        const destinationConnection = connectionManager.getOwned(destinationConnectionId, req.user!.userId, isAdmin);
 
         if (!sourceConnection || !destinationConnection) {
             res.status(404).json({
@@ -21,23 +22,17 @@ export const runMigration = async (req: AuthenticatedRequest, res: Response): Pr
             return;
         }
 
-        const project = await mappingService.getProjectDetail(Number(projectId));
+        const access = await mappingService.getAccessibleProject(Number(projectId), req.user!);
 
-        if (!project) {
-            res.status(404).json({
+        if (!access.ok) {
+            res.status(access.status).json({
                 success: false,
-                message: "Project Not Found"
+                message: access.message
             });
             return;
         }
 
-        if (!canAccessProject(project, req.user!)) {
-            res.status(403).json({
-                success: false,
-                message: "You cannot run another user's project"
-            });
-            return;
-        }
+        const project = access.project;
 
         if (!project.tables || project.tables.length === 0) {
             res.status(400).json({
@@ -52,6 +47,7 @@ export const runMigration = async (req: AuthenticatedRequest, res: Response): Pr
             sourceConnection,
             destinationConnection,
             batchSize: batchSize ? Number(batchSize) : undefined,
+            mode: mode === "incremental" ? "incremental" : "full",
             startedBy: {
                 userId: req.user!.userId,
                 name: req.user!.name,
@@ -100,6 +96,21 @@ export const getMigrationStatus = async (req: AuthenticatedRequest, res: Respons
 
 };
 
+export const getMigrationStats = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+
+    try {
+        const stats = await runHistoryService.getStatsForUser({
+            userId: req.user!.userId,
+            role: req.user!.role
+        });
+        res.json({ success: true, stats });
+
+    } catch (err: any) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+
+};
+
 export const getMigrationHistory = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
@@ -121,17 +132,13 @@ export const getFailedRows = async (req: AuthenticatedRequest, res: Response): P
         const runId = String(req.params.runId);
         const tableMappingId = req.query.tableMappingId ? Number(req.query.tableMappingId) : undefined;
 
-        const run = await runHistoryService.getRun(runId);
-        if (!run) {
-            res.status(404).json({ success: false, message: "Migration Run Not Found" });
-            return;
-        }
-        if (req.user!.role !== "admin" && run.started_by_user_id !== req.user!.userId) {
-            res.status(403).json({ success: false, message: "You cannot access another user's run" });
+        const access = await runHistoryService.getAccessibleRun(runId, req.user!);
+        if (!access.ok) {
+            res.status(access.status).json({ success: false, message: access.message });
             return;
         }
 
-        const failedRows = await runHistoryService.getFailedRows(run.id, tableMappingId);
+        const failedRows = await runHistoryService.getFailedRows(access.run.id, tableMappingId);
         res.json({ success: true, failedRows });
 
     } catch (err: any) {
@@ -146,16 +153,13 @@ export const downloadReport = async (req: AuthenticatedRequest, res: Response): 
         const runId = String(req.params.runId);
         const format = String(req.query.format || "csv").toLowerCase();
 
-        const run = await runHistoryService.getRun(runId);
-        if (!run) {
-            res.status(404).json({ success: false, message: "Migration Run Not Found" });
-            return;
-        }
-        if (req.user!.role !== "admin" && run.started_by_user_id !== req.user!.userId) {
-            res.status(403).json({ success: false, message: "You cannot access another user's report" });
+        const access = await runHistoryService.getAccessibleRun(runId, req.user!);
+        if (!access.ok) {
+            res.status(access.status).json({ success: false, message: access.message });
             return;
         }
 
+        const run = access.run;
         const filenameBase = `migration-report-${run.run_id}`;
 
         if (format === "pdf") {

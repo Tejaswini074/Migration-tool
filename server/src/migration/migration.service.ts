@@ -1,7 +1,9 @@
 import { v4 as uuid } from "uuid";
 import mappingService from "../Mapping/mapping.service";
 import runHistoryService, { FailedRowInput } from "./runHistory.service";
+import notificationService from "../notifications/notification.service";
 import { resolveTableOrder } from "./dependencyOrder";
+import { applyTransform } from "./transform";
 import { IConnector } from "../connectors/types";
 
 const DEFAULT_BATCH_SIZE = 500;
@@ -45,22 +47,8 @@ interface StartParams {
     destinationConnection: IConnector;
     startedBy: StartedBy;
     batchSize?: number;
+    mode?: "full" | "incremental";
 }
-
-const applyTransform = (value: any, rule?: string | null) => {
-    if (value === null || value === undefined) return value;
-
-    switch (rule) {
-        case "uppercase":
-            return String(value).toUpperCase();
-        case "lowercase":
-            return String(value).toLowerCase();
-        case "trim":
-            return String(value).trim();
-        default:
-            return value;
-    }
-};
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -149,9 +137,30 @@ class MigrationService {
             } catch (persistErr) {
                 console.error("Failed to persist run failure:", persistErr);
             }
+
+            this.notifyRunFinished(runState, params.startedBy.userId, params.project.project_name);
         });
 
         return runId;
+    }
+
+    private notifyRunFinished(runState: RunState, startedByUserId: number, projectName: string) {
+        const totals = runState.tables.reduce(
+            (acc, t) => ({
+                totalRows: acc.totalRows + t.totalRows,
+                migratedRows: acc.migratedRows + t.migratedRows,
+                failedRows: acc.failedRows + t.failedRows
+            }),
+            { totalRows: 0, migratedRows: 0, failedRows: 0 }
+        );
+
+        notificationService.notifyRunFinished({
+            runId: runState.runId,
+            projectName,
+            status: runState.status as "completed" | "completed_with_errors" | "failed",
+            startedByUserId,
+            ...totals
+        });
     }
 
     private async execute(runState: RunState, params: StartParams) {
@@ -189,10 +198,17 @@ class MigrationService {
                 const destinationIdMap = new Map<any, any>();
                 idMap.set(table.destination_table, destinationIdMap);
 
+                const incrementalMode = params.mode === "incremental"
+                    && Boolean(table.high_water_column)
+                    && Boolean(sourceConnection.readBatchSince);
+                let cursor: any = table.high_water_value ?? null;
+
                 let offset = 0;
                 while (true) {
 
-                    const rows = await sourceConnection.readBatch(table.source_table, batchSize, offset);
+                    const rows = incrementalMode
+                        ? await sourceConnection.readBatchSince!(table.source_table, table.high_water_column, cursor, batchSize, 0)
+                        : await sourceConnection.readBatch(table.source_table, batchSize, offset);
 
                     if (rows.length === 0) break;
 
@@ -248,7 +264,14 @@ class MigrationService {
                         runState.dbId, table.id, "running", tableState.migratedRows, totalRows, null, tableState.failedRows
                     );
 
+                    if (incrementalMode) {
+                        cursor = rows[rows.length - 1][table.high_water_column];
+                    }
                     offset += batchSize;
+                }
+
+                if (incrementalMode && cursor !== null && cursor !== undefined) {
+                    await mappingService.updateTableHighWaterValue(table.id, cursor);
                 }
 
                 tableState.status = tableState.failedRows > 0 ? "completed_with_errors" : "completed";
@@ -291,6 +314,8 @@ class MigrationService {
         runState.finishedAt = new Date().toISOString();
 
         await runHistoryService.finishRun(runState.dbId, runState.status);
+
+        this.notifyRunFinished(runState, params.startedBy.userId, params.project.project_name);
     }
 
 }

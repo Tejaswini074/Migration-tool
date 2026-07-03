@@ -1,6 +1,6 @@
 import { Response } from "express";
 import connectionManager from "../database/connectionManager";
-import mappingService, { canAccessProject } from "../Mapping/mapping.service";
+import mappingService from "../Mapping/mapping.service";
 import validationService from "./validation.service";
 import { AuthenticatedRequest } from "../auth/auth.middleware";
 
@@ -9,8 +9,9 @@ export const validateProject = async (req: AuthenticatedRequest, res: Response):
     try {
         const { projectId, sourceConnectionId, destinationConnectionId } = req.body;
 
-        const sourceConnection = connectionManager.get(sourceConnectionId);
-        const destinationConnection = connectionManager.get(destinationConnectionId);
+        const isAdmin = req.user!.role === "admin";
+        const sourceConnection = connectionManager.getOwned(sourceConnectionId, req.user!.userId, isAdmin);
+        const destinationConnection = connectionManager.getOwned(destinationConnectionId, req.user!.userId, isAdmin);
 
         if (!sourceConnection || !destinationConnection) {
             res.status(404).json({
@@ -20,17 +21,17 @@ export const validateProject = async (req: AuthenticatedRequest, res: Response):
             return;
         }
 
-        const project = await mappingService.getProjectDetail(Number(projectId));
+        const access = await mappingService.getAccessibleProject(Number(projectId), req.user!);
 
-        if (!project) {
-            res.status(404).json({ success: false, message: "Project Not Found" });
+        if (!access.ok) {
+            res.status(access.status).json({
+                success: false,
+                message: access.message
+            });
             return;
         }
 
-        if (!canAccessProject(project, req.user!)) {
-            res.status(403).json({ success: false, message: "You cannot validate another user's project" });
-            return;
-        }
+        const project = access.project;
 
         if (!project.tables || project.tables.length === 0) {
             res.status(400).json({ success: false, message: "Project has no table mappings to validate" });

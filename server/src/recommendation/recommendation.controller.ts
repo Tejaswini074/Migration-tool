@@ -1,13 +1,15 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import connectionManager from "../database/connectionManager";
-import recommendationService, { TableInfo } from "./reommendation.service";
+import recommendationService from "./reommendation.service";
+import { AuthenticatedRequest } from "../auth/auth.middleware";
 
-export const recommendTables = async (req: Request, res: Response) => {
+export const recommendTables = async (req: AuthenticatedRequest, res: Response) => {
 
     try {
         const { sourceConnectionId, destinationConnectionId } = req.body;
-        const source = connectionManager.get(sourceConnectionId);
-        const destination = connectionManager.get(destinationConnectionId);
+        const isAdmin = req.user!.role === "admin";
+        const source = connectionManager.getOwned(sourceConnectionId, req.user!.userId, isAdmin);
+        const destination = connectionManager.getOwned(destinationConnectionId, req.user!.userId, isAdmin);
 
         if (!source || !destination) {
             return res.status(404).json({
@@ -16,35 +18,14 @@ export const recommendTables = async (req: Request, res: Response) => {
             });
         }
 
-        const sourceTables = await source.getTables();
-        const destinationTables = await destination.getTables();
+        const recommendation = await recommendationService.compareSchemas(source, destination);
 
-        const sourceSchema: TableInfo[] = [];
-        for (const table of sourceTables) {
-            sourceSchema.push({
-                tableName: table.tableName,
-                totalRows: table.totalRows,
-                columns: await source.getColumns(table.tableName)
-            });
-        }
-
-        const destinationSchema: TableInfo[] = [];
-        for (const table of destinationTables) {
-            destinationSchema.push({
-                tableName: table.tableName,
-                totalRows: table.totalRows,
-                columns: await destination.getColumns(table.tableName)
-            });
-        }
-
-        const recommendation = recommendationService.recommendTables(sourceSchema, destinationSchema);
         res.json({
             success: true,
             recommendation
         });
-    }
 
-    catch (err: any) {
+    } catch (err: any) {
         res.status(500).json({
             success: false,
             message: err.message

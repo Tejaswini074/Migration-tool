@@ -2,8 +2,11 @@ import { apiClient } from "./client";
 import type {
     MigrationRunSummary,
     MigrationRun,
+    MigrationStats,
     MigrationProjectSummary,
     MigrationProjectDetail,
+    MigrationSchedule,
+    ScheduleConnectionConfig,
     ProjectValidationResult,
     FailedRow,
     TableRecommendation,
@@ -16,6 +19,7 @@ export interface ConnectPayload {
     user: string;
     password: string;
     database: string;
+    type?: "mysql" | "postgres";
 }
 
 export const connectDatabase = async (payload: ConnectPayload) => {
@@ -23,6 +27,7 @@ export const connectDatabase = async (payload: ConnectPayload) => {
         success: boolean;
         connectionId: string;
         database: string;
+        type: "mysql" | "postgres";
         message: string;
     }>("/database/connect", payload);
     return data;
@@ -99,6 +104,35 @@ export const saveColumnMapping = async (payload: {
     return data.columnMappingId;
 };
 
+export interface NotificationSettings {
+    webhookUrl: string | null;
+    notifyOnSuccess: boolean;
+    notifyOnFailure: boolean;
+}
+
+export const getNotificationSettings = async () => {
+    const { data } = await apiClient.get<{ success: boolean; settings: NotificationSettings }>(
+        "/notifications/settings"
+    );
+    return data.settings;
+};
+
+export const updateNotificationSettings = async (payload: NotificationSettings) => {
+    await apiClient.put("/notifications/settings", payload);
+};
+
+export const previewMapping = async (payload: {
+    sourceConnectionId: string;
+    tableName: string;
+    columns: { sourceColumn: string; destinationColumn: string; transformRule?: string | null }[];
+}) => {
+    const { data } = await apiClient.post<{
+        success: boolean;
+        rows: Record<string, { source: unknown; transformed: unknown }>[];
+    }>("/mapping/preview", payload);
+    return data.rows;
+};
+
 export const validateProject = async (payload: {
     projectId: number;
     sourceConnectionId: string;
@@ -116,6 +150,7 @@ export const runMigration = async (payload: {
     sourceConnectionId: string;
     destinationConnectionId: string;
     batchSize?: number;
+    mode?: "full" | "incremental";
 }) => {
     const { data } = await apiClient.post<{ success: boolean; runId: string }>(
         "/migration/run",
@@ -139,6 +174,11 @@ export const getMigrationStatus = async (runId: string) => {
     return data.run;
 };
 
+export const getMigrationStats = async () => {
+    const { data } = await apiClient.get<{ success: boolean; stats: MigrationStats }>("/migration/stats");
+    return data.stats;
+};
+
 export const getMigrationHistory = async () => {
     const { data } = await apiClient.get<{ success: boolean; runs: MigrationRunSummary[] }>(
         "/migration/history"
@@ -160,4 +200,37 @@ export const downloadMigrationReport = async (runId: string, format: "csv" | "pd
     link.click();
     link.remove();
     window.URL.revokeObjectURL(blobUrl);
+};
+
+export const setHighWaterColumn = async (tableMappingId: number, column: string | null) => {
+    await apiClient.post(`/mapping/table/${tableMappingId}/high-water-column`, { column });
+};
+
+export const createSchedule = async (payload: {
+    projectId: number;
+    cronExpression: string;
+    mode: "full" | "incremental";
+    batchSize?: number;
+    source: ScheduleConnectionConfig;
+    destination: ScheduleConnectionConfig;
+}) => {
+    const { data } = await apiClient.post<{ success: boolean; scheduleId: number }>("/schedules", payload);
+    return data.scheduleId;
+};
+
+export const getSchedules = async () => {
+    const { data } = await apiClient.get<{ success: boolean; schedules: MigrationSchedule[] }>("/schedules");
+    return data.schedules;
+};
+
+export const toggleSchedule = async (scheduleId: number, isActive: boolean) => {
+    await apiClient.patch(`/schedules/${scheduleId}/toggle`, { isActive });
+};
+
+export const deleteSchedule = async (scheduleId: number) => {
+    await apiClient.delete(`/schedules/${scheduleId}`);
+};
+
+export const runScheduleNow = async (scheduleId: number) => {
+    await apiClient.post(`/schedules/${scheduleId}/run-now`);
 };

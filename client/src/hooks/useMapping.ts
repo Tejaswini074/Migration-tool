@@ -3,7 +3,8 @@ import {
     createProject,
     recommendTables,
     saveColumnMapping,
-    saveTableMapping
+    saveTableMapping,
+    setHighWaterColumn
 } from "../services/dataBridgeApi";
 import { extractErrorMessage } from "../services/client";
 import type {
@@ -13,6 +14,8 @@ import type {
     TableRecommendation,
     TransformRule
 } from "../types";
+
+const serializeTransformRule = (rule: TransformRule | null) => (rule ? JSON.stringify(rule) : null);
 
 const SKIP = "";
 
@@ -32,10 +35,22 @@ const buildColumnDrafts = (
         return {
             sourceColumn: col.Field,
             destinationColumn: match ? match.Field : SKIP,
-            transformRule: "" as TransformRule
+            transformRule: null
         };
     });
 };
+
+const withColumns = (
+    sourceTable: string,
+    destinationTable: string,
+    source: ConnectionState,
+    destination: ConnectionState
+): TableMappingDraft => ({
+    sourceTable,
+    destinationTable,
+    columns: destinationTable ? buildColumnDrafts(sourceTable, destinationTable, source, destination) : [],
+    highWaterColumn: null
+});
 
 export function useMapping(
     source: ConnectionState,
@@ -68,13 +83,7 @@ export function useMapping(
                         ? rec.destinationTable
                         : SKIP;
 
-                    initial[table.tableName] = {
-                        sourceTable: table.tableName,
-                        destinationTable,
-                        columns: destinationTable
-                            ? buildColumnDrafts(table.tableName, destinationTable, source, destination)
-                            : []
-                    };
+                    initial[table.tableName] = withColumns(table.tableName, destinationTable, source, destination);
                 }
                 setTableMappings(initial);
             } catch (err) {
@@ -98,26 +107,37 @@ export function useMapping(
     const handleDestinationTableChange = (sourceTable: string, destinationTable: string) => {
         setTableMappings((prev) => ({
             ...prev,
-            [sourceTable]: {
-                sourceTable,
-                destinationTable,
-                columns: destinationTable
-                    ? buildColumnDrafts(sourceTable, destinationTable, source, destination)
-                    : []
-            }
+            [sourceTable]: withColumns(sourceTable, destinationTable, source, destination)
+        }));
+    };
+
+    const handleHighWaterColumnChange = (sourceTable: string, column: string) => {
+        setTableMappings((prev) => ({
+            ...prev,
+            [sourceTable]: { ...prev[sourceTable], highWaterColumn: column || null }
         }));
     };
 
     const handleColumnChange = (
         sourceTable: string,
         columnIndex: number,
-        field: "destinationColumn" | "transformRule",
+        field: "destinationColumn",
         value: string
     ) => {
         setTableMappings((prev) => {
             const table = prev[sourceTable];
             const columns = table.columns.map((c, i) =>
                 i === columnIndex ? { ...c, [field]: value } : c
+            );
+            return { ...prev, [sourceTable]: { ...table, columns } };
+        });
+    };
+
+    const handleTransformChange = (sourceTable: string, columnIndex: number, rule: TransformRule | null) => {
+        setTableMappings((prev) => {
+            const table = prev[sourceTable];
+            const columns = table.columns.map((c, i) =>
+                i === columnIndex ? { ...c, transformRule: rule } : c
             );
             return { ...prev, [sourceTable]: { ...table, columns } };
         });
@@ -147,8 +167,12 @@ export function useMapping(
                         tableMappingId,
                         sourceColumn: col.sourceColumn,
                         destinationColumn: col.destinationColumn,
-                        transformRule: col.transformRule || null
+                        transformRule: serializeTransformRule(col.transformRule)
                     });
+                }
+
+                if (table.highWaterColumn) {
+                    await setHighWaterColumn(tableMappingId, table.highWaterColumn);
                 }
             }
 
@@ -171,6 +195,8 @@ export function useMapping(
         acceptedTables,
         handleDestinationTableChange,
         handleColumnChange,
+        handleTransformChange,
+        handleHighWaterColumnChange,
         handleSave
     };
 }

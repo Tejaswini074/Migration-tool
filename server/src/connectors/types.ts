@@ -1,4 +1,4 @@
-export type ConnectorType = "mysql";
+export type ConnectorType = "mysql" | "postgres";
 
 export interface ColumnInfo {
     Field: string;
@@ -55,6 +55,10 @@ export interface IConnector {
     getPrimaryKeyColumn(tableName: string): Promise<string | null>;
     countRows(tableName: string): Promise<number>;
     readBatch(tableName: string, limit: number, offset: number): Promise<Record<string, any>[]>;
+    /** Incremental sync: only rows where `column` is greater than `sinceValue`. */
+    readBatchSince?(
+        tableName: string, column: string, sinceValue: any, limit: number, offset: number
+    ): Promise<Record<string, any>[]>;
     insertRow(tableName: string, row: Record<string, any>): Promise<InsertResult>;
 
     countNulls(tableName: string, columnName: string): Promise<number>;

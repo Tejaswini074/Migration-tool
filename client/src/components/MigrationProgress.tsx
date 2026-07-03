@@ -8,6 +8,7 @@ import Card from "./ui/Card";
 import Button from "./ui/Button";
 import Badge from "./ui/Badge";
 import Input from "./ui/Input";
+import Select from "./ui/Select";
 import { cn } from "../lib/cn";
 
 interface Props {
@@ -41,6 +42,7 @@ export default function MigrationProgress({ projectId, source, destination }: Pr
         destination
     );
     const [batchSize, setBatchSize] = useState("500");
+    const [mode, setMode] = useState<"full" | "incremental">("full");
 
     return (
         <div className="flex flex-col gap-5">
@@ -56,7 +58,7 @@ export default function MigrationProgress({ projectId, source, destination }: Pr
                         </p>
                     </div>
 
-                    <div className="mt-4 max-w-40">
+                    <div className="mt-4 grid max-w-md grid-cols-2 gap-3">
                         <Input
                             label="Batch size"
                             type="number"
@@ -66,9 +68,13 @@ export default function MigrationProgress({ projectId, source, destination }: Pr
                             value={batchSize}
                             onChange={(e) => setBatchSize(e.target.value)}
                         />
+                        <Select label="Sync mode" value={mode} onChange={(e) => setMode(e.target.value as "full" | "incremental")}>
+                            <option value="full">Full sync</option>
+                            <option value="incremental">Incremental (only new rows)</option>
+                        </Select>
                     </div>
 
-                    <Button loading={starting} onClick={() => handleStart(Number(batchSize) || undefined)} className="mt-4">
+                    <Button loading={starting} onClick={() => handleStart(Number(batchSize) || undefined, mode)} className="mt-4">
                         Run Migration
                     </Button>
                 </Card>
@@ -147,7 +153,7 @@ export default function MigrationProgress({ projectId, source, destination }: Pr
                                                     ? "bg-red-500"
                                                     : table.status === "completed_with_errors"
                                                         ? "bg-amber-500"
-                                                        : "bg-indigo-600 dark:bg-indigo-400"
+                                                        : "bg-linear-to-r from-indigo-600 to-violet-500 dark:from-indigo-400 dark:to-violet-400"
                                             )}
                                             style={{ width: `${pct}%` }}
                                         />
