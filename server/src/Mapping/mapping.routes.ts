@@ -1,12 +1,6 @@
 import { Router } from "express";
 
-import {
-    createProject,
-    getProjects,
-    getProjectDetail,
-    saveTableMapping,
-    saveColumnMapping
-} from "./mapping.controller";
+import { createProject, getProjects, getProjectDetail, saveTableMapping, saveColumnMapping } from "./mapping.controller";
 
 const router = Router();
 

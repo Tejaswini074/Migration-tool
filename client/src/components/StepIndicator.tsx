@@ -25,9 +25,10 @@ export default function StepIndicator({ step }: { step: WizardStep }) {
                             <div
                                 className={cn(
                                     "flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors",
-                                    isDone && "border-blue-600 bg-blue-600 text-white",
-                                    isActive && "border-blue-600 bg-white text-blue-600",
-                                    !isDone && !isActive && "border-slate-300 bg-white text-slate-400"
+                                    isDone && "border-indigo-600 bg-indigo-600 text-white dark:border-indigo-400 dark:bg-indigo-400 dark:text-slate-950",
+                                    isActive &&
+                                        "border-indigo-600 bg-white text-indigo-600 shadow-[0_0_0_4px] shadow-indigo-500/10 dark:border-indigo-400 dark:bg-white/5 dark:text-indigo-300 dark:shadow-indigo-400/10",
+                                    !isDone && !isActive && "border-slate-300 bg-white text-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-slate-500"
                                 )}
                             >
                                 {isDone ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
@@ -35,7 +36,7 @@ export default function StepIndicator({ step }: { step: WizardStep }) {
                             <span
                                 className={cn(
                                     "text-sm font-medium",
-                                    isActive || isDone ? "text-slate-900" : "text-slate-400"
+                                    isActive || isDone ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"
                                 )}
                             >
                                 {s.label}
@@ -45,7 +46,7 @@ export default function StepIndicator({ step }: { step: WizardStep }) {
                             <div
                                 className={cn(
                                     "mx-4 h-0.5 flex-1",
-                                    isDone ? "bg-blue-600" : "bg-slate-200"
+                                    isDone ? "bg-indigo-600 dark:bg-indigo-400" : "bg-slate-200 dark:bg-white/10"
                                 )}
                             />
                         )}

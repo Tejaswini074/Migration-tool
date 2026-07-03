@@ -18,16 +18,16 @@ export default function ConnectionCard({ label, connection, onConnected }: Props
         return (
             <Card>
                 <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-50">
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-50 dark:bg-emerald-500/10">
+                        <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-emerald-400" />
                     </div>
                     <div>
-                        <p className="text-sm font-semibold text-slate-900">{label}</p>
-                        <p className="mt-0.5 text-sm text-slate-600">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white">{label}</p>
+                        <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
                             <span className="font-medium">{connection.database}</span> @ {connection.host}:
                             {connection.port}
                         </p>
-                        <p className="mt-1 text-xs text-slate-400">{connection.schema.length} table(s) found</p>
+                        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{connection.schema.length} table(s) found</p>
                     </div>
                 </div>
             </Card>
@@ -37,8 +37,8 @@ export default function ConnectionCard({ label, connection, onConnected }: Props
     return (
         <Card>
             <div className="mb-4 flex items-center gap-2">
-                <Server className="h-4 w-4 text-slate-400" />
-                <p className="text-sm font-semibold text-slate-900">{label}</p>
+                <Server className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">{label}</p>
             </div>
 
             <div className="flex flex-col gap-3">
@@ -56,7 +56,7 @@ export default function ConnectionCard({ label, connection, onConnected }: Props
                 <Input label="Database" value={form.database} onChange={handleChange("database")} />
             </div>
 
-            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
 
             <Button
                 loading={loading}

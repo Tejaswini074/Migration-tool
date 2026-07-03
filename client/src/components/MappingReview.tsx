@@ -35,8 +35,8 @@ export default function MappingReview({ source, destination, onProjectCreated }:
 
     if (loading) {
         return (
-            <div className="flex items-center gap-2 py-12 text-sm text-slate-500">
-                <Sparkles className="h-4 w-4 animate-pulse text-blue-500" />
+            <div className="flex items-center gap-2 py-12 text-sm text-slate-500 dark:text-slate-400">
+                <Sparkles className="h-4 w-4 animate-pulse text-indigo-500 dark:text-indigo-400" />
                 Analyzing schemas and generating suggestions...
             </div>
         );
@@ -52,7 +52,7 @@ export default function MappingReview({ source, destination, onProjectCreated }:
                 />
             </Card>
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
             {source.schema.map((table) => {
                 const draft = tableMappings[table.tableName];
@@ -62,8 +62,8 @@ export default function MappingReview({ source, destination, onProjectCreated }:
                     <Card key={table.tableName}>
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
-                                <h4 className="text-sm font-semibold text-slate-900">{table.tableName}</h4>
-                                <p className="text-xs text-slate-500">{table.totalRows} row(s)</p>
+                                <h4 className="text-sm font-semibold text-slate-900 dark:text-white">{table.tableName}</h4>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">{table.totalRows} row(s)</p>
                             </div>
 
                             <div className="flex items-center gap-3">
@@ -90,22 +90,22 @@ export default function MappingReview({ source, destination, onProjectCreated }:
                         </div>
 
                         {draft?.destinationTable && (
-                            <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
+                            <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 dark:border-white/10">
                                 <table className="w-full text-sm">
-                                    <thead className="bg-slate-50">
+                                    <thead className="bg-slate-50 dark:bg-white/5">
                                         <tr>
-                                            <th className="px-4 py-2 text-left font-medium text-slate-500">
+                                            <th className="px-4 py-2 text-left font-medium text-slate-500 dark:text-slate-400">
                                                 Source column
                                             </th>
-                                            <th className="px-4 py-2 text-left font-medium text-slate-500">
+                                            <th className="px-4 py-2 text-left font-medium text-slate-500 dark:text-slate-400">
                                                 Destination column
                                             </th>
-                                            <th className="px-4 py-2 text-left font-medium text-slate-500">
+                                            <th className="px-4 py-2 text-left font-medium text-slate-500 dark:text-slate-400">
                                                 Transform
                                             </th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-slate-100">
+                                    <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                                         {draft.columns.map((col, i) => {
                                             const destinationColumns =
                                                 destination.schema.find(
@@ -114,7 +114,7 @@ export default function MappingReview({ source, destination, onProjectCreated }:
 
                                             return (
                                                 <tr key={col.sourceColumn}>
-                                                    <td className="px-4 py-2 text-slate-700">
+                                                    <td className="px-4 py-2 text-slate-700 dark:text-slate-300">
                                                         {col.sourceColumn}
                                                     </td>
                                                     <td className="px-4 py-2">

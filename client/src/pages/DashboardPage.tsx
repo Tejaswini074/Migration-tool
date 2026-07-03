@@ -27,14 +27,14 @@ export default function DashboardPage() {
     if (!user) return null;
 
     return (
-        <div className="flex h-screen bg-slate-50">
+        <div className="flex h-screen bg-slate-50 dark:bg-[#08090d]">
             <Sidebar user={user} view={view} onNavigate={setView} onLogout={logout} />
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="brand-glow flex-1 overflow-y-auto">
                 <div className="mx-auto max-w-5xl px-8 py-8">
                     <header className="mb-8">
-                        <h1 className="text-2xl font-semibold text-slate-900">{pageTitles[view].title}</h1>
-                        <p className="mt-1 text-sm text-slate-500">{pageTitles[view].subtitle}</p>
+                        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">{pageTitles[view].title}</h1>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{pageTitles[view].subtitle}</p>
                     </header>
 
                     {view === "admin" && <AdminUsersPage />}

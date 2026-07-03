@@ -16,34 +16,24 @@ export const recommendTables = async (req: Request, res: Response) => {
             });
         }
 
-        const [sourceTables]: any = await source.query("SHOW TABLES");
-        const [destinationTables]: any = await destination.query("SHOW TABLES");
+        const sourceTables = await source.getTables();
+        const destinationTables = await destination.getTables();
+
         const sourceSchema: TableInfo[] = [];
-
         for (const table of sourceTables) {
-
-            const tableName = String(Object.values(table)[0]);
-            const [columns]: any = await source.query(`SHOW COLUMNS FROM \`${tableName}\``);
-            const [count]: any = await source.query(`SELECT COUNT(*) total FROM \`${tableName}\``);
-
             sourceSchema.push({
-                tableName,
-                totalRows: count[0].total,
-                columns
+                tableName: table.tableName,
+                totalRows: table.totalRows,
+                columns: await source.getColumns(table.tableName)
             });
         }
 
         const destinationSchema: TableInfo[] = [];
-
         for (const table of destinationTables) {
-            const tableName = String(Object.values(table)[0]);
-            const [columns]: any = await destination.query(`SHOW COLUMNS FROM \`${tableName}\``);
-            const [count]: any = await destination.query(`SELECT COUNT(*) total FROM \`${tableName}\``);
-
             destinationSchema.push({
-                tableName,
-                totalRows: count[0].total,
-                columns
+                tableName: table.tableName,
+                totalRows: table.totalRows,
+                columns: await destination.getColumns(table.tableName)
             });
         }
 

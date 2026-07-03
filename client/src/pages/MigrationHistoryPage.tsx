@@ -19,7 +19,7 @@ export default function MigrationHistoryPage() {
     if (!connection) {
         return (
             <div className="max-w-md">
-                <p className="mb-4 text-sm text-slate-500">
+                <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
                     Connect to the database where a migration project's mapping data lives to view its run
                     history.
                 </p>
@@ -30,38 +30,38 @@ export default function MigrationHistoryPage() {
 
     return (
         <div className="flex flex-col gap-5">
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
             <Card className="p-0">
                 {loading ? (
-                    <p className="px-6 py-6 text-sm text-slate-500">Loading...</p>
+                    <p className="px-6 py-6 text-sm text-slate-500 dark:text-slate-400">Loading...</p>
                 ) : runs.length === 0 ? (
-                    <p className="px-6 py-6 text-sm text-slate-500">No migration runs found yet.</p>
+                    <p className="px-6 py-6 text-sm text-slate-500 dark:text-slate-400">No migration runs found yet.</p>
                 ) : (
                     <table className="w-full text-sm">
-                        <thead className="bg-slate-50">
+                        <thead className="bg-slate-50 dark:bg-white/5">
                             <tr>
-                                <th className="px-6 py-3 text-left font-medium text-slate-500">Project</th>
-                                <th className="px-6 py-3 text-left font-medium text-slate-500">Started by</th>
-                                <th className="px-6 py-3 text-left font-medium text-slate-500">Started at</th>
-                                <th className="px-6 py-3 text-left font-medium text-slate-500">Status</th>
-                                <th className="px-6 py-3 text-right font-medium text-slate-500">Report</th>
+                                <th className="px-6 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Project</th>
+                                <th className="px-6 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Started by</th>
+                                <th className="px-6 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Started at</th>
+                                <th className="px-6 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Status</th>
+                                <th className="px-6 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Report</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                             {runs.map((run) => (
                                 <tr key={run.run_id}>
-                                    <td className="px-6 py-3 text-slate-700">
+                                    <td className="px-6 py-3 text-slate-700 dark:text-slate-300">
                                         {run.project_name}
-                                        <div className="text-xs text-slate-400">
+                                        <div className="text-xs text-slate-400 dark:text-slate-500">
                                             {run.source_database} &rarr; {run.destination_database}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-3 text-slate-500">
+                                    <td className="px-6 py-3 text-slate-500 dark:text-slate-400">
                                         {run.started_by_name}
-                                        <div className="text-xs text-slate-400">{run.started_by_email}</div>
+                                        <div className="text-xs text-slate-400 dark:text-slate-500">{run.started_by_email}</div>
                                     </td>
-                                    <td className="px-6 py-3 text-slate-500">
+                                    <td className="px-6 py-3 text-slate-500 dark:text-slate-400">
                                         {new Date(run.started_at).toLocaleString()}
                                     </td>
                                     <td className="px-6 py-3">

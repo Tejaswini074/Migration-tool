@@ -71,7 +71,6 @@ export const getForeignKeys = async (req: Request, res: Response): Promise<void>
         const connection = connectionManager.get(connectionId);
 
         if (!connection) {
-
             res.status(404).json({
                 success: false,
                 message: "Connection Not Found"

@@ -1,14 +1,15 @@
 import mysql from "mysql2/promise";
+import { IConnector } from "../connectors/types";
 
 class ConnectionManager {
 
-    private connections: Map<string, mysql.Pool> = new Map();
+    private connections: Map<string, IConnector> = new Map();
 
-    add(id: string, connection: mysql.Pool) {
-        this.connections.set(id, connection);
+    add(id: string, connector: IConnector) {
+        this.connections.set(id, connector);
     }
 
-    get(id: string) {
+    get(id: string): IConnector | undefined {
         return this.connections.get(id);
     }
 
@@ -18,6 +19,18 @@ class ConnectionManager {
 
     getAll() {
         return this.connections;
+    }
+
+    /**
+     * Platform metadata (projects, table/column mappings, run history) is
+     * stored as plain MySQL DDL/DML and is out of scope for the connector
+     * abstraction. This is the one place that steps outside IConnector to
+     * fetch the underlying pool for that purpose.
+     */
+    getMySqlPool(id: string): mysql.Pool | null {
+        const connector = this.connections.get(id);
+        if (!connector || connector.type !== "mysql") return null;
+        return connector.getNativeHandle() as mysql.Pool;
     }
 
 }

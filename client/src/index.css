@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
 }
@@ -11,7 +13,8 @@ body,
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-slate-50 text-slate-900 antialiased dark:bg-[#08090d] dark:text-slate-100;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 ::-webkit-scrollbar {
@@ -20,9 +23,16 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 rounded-full;
+  @apply rounded-full bg-slate-300 dark:bg-white/10;
 }
 
 ::-webkit-scrollbar-track {
   @apply bg-transparent;
+}
+
+/* Subtle ambient glow used behind the login card and dashboard shell, dark mode only */
+.dark .brand-glow {
+  background:
+    radial-gradient(60% 50% at 15% 0%, color-mix(in oklab, var(--color-indigo-500) 22%, transparent), transparent 60%),
+    radial-gradient(50% 40% at 100% 100%, color-mix(in oklab, var(--color-violet-500) 16%, transparent), transparent 60%);
 }

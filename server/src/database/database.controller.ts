@@ -1,13 +1,14 @@
 import { Request, Response } from "express";
-import mysql from "mysql2/promise";
 import { v4 as uuid } from "uuid";
 import connectionManager from "./connectionManager";
+import { createConnector } from "../connectors/connectorFactory";
+import { ConnectorType } from "../connectors/types";
 
 
 export const connectDatabase = async (req: Request, res: Response): Promise<void> => {
 
     try {
-        const { host, port, user, password, database } = req.body;
+        const { host, port, user, password, database, type } = req.body;
         if (!host || !port || !user || !database) {
 
             res.status(400).json({
@@ -16,20 +17,22 @@ export const connectDatabase = async (req: Request, res: Response): Promise<void
             });
             return;
         }
-        const pool = mysql.createPool({
-            host, port, user, password, database,
-            waitForConnections: true,
-            connectionLimit: 10
+
+        const connector = createConnector({
+            type: (type || "mysql") as ConnectorType,
+            host, port, user, password, database
         });
 
-        await pool.query("SELECT 1");
+        await connector.testConnection();
+
         const connectionId = uuid();
-        connectionManager.add(connectionId, pool);
+        connectionManager.add(connectionId, connector);
 
         res.status(200).json({
             success: true,
             connectionId,
             database,
+            type: connector.type,
             message: "Database Connected Successfully"
         });
 
@@ -46,8 +49,8 @@ export const disconnectDatabase = async (req: Request, res: Response): Promise<v
 
     try {
         const connectionId = String(req.params.connectionId);
-        const connection = connectionManager.get(connectionId);
-        if (!connection) {
+        const connector = connectionManager.get(connectionId);
+        if (!connector) {
 
             res.status(404).json({
                 success: false,
@@ -56,7 +59,7 @@ export const disconnectDatabase = async (req: Request, res: Response): Promise<v
             return;
         }
 
-        await connection.end();
+        await connector.close();
         connectionManager.remove(connectionId);
 
         res.status(200).json({
@@ -77,8 +80,8 @@ export const getActiveConnections = async (req: Request, res: Response): Promise
 
     try {
         const activeConnections: any[] = [];
-        connectionManager.getAll().forEach((_, connectionId) => {
-            activeConnections.push({ connectionId });
+        connectionManager.getAll().forEach((connector, connectionId) => {
+            activeConnections.push({ connectionId, type: connector.type });
         });
 
         res.status(200).json({

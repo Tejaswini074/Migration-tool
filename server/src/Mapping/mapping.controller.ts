@@ -3,7 +3,7 @@ import mappingService from "./mapping.service";
 import connectionManager from "../database/connectionManager";
 
 const getConnectionOr404 = (connectionId: string, res: Response) => {
-    const connection = connectionManager.get(connectionId);
+    const connection = connectionManager.getMySqlPool(connectionId);
     if (!connection) {
         res.status(404).json({
             success: false,

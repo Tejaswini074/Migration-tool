@@ -14,7 +14,7 @@ export const runMigration = async (req: AuthenticatedRequest, res: Response): Pr
 
         const sourceConnection = connectionManager.get(sourceConnectionId);
         const destinationConnection = connectionManager.get(destinationConnectionId);
-        const metadataConnection = connectionManager.get(metadataConnectionId || destinationConnectionId);
+        const metadataConnection = connectionManager.getMySqlPool(metadataConnectionId || destinationConnectionId);
 
         if (!sourceConnection || !destinationConnection || !metadataConnection) {
             res.status(404).json({
@@ -99,7 +99,7 @@ export const getMigrationHistory = async (req: AuthenticatedRequest, res: Respon
 
     try {
         const connectionId = String(req.params.connectionId);
-        const connection = connectionManager.get(connectionId);
+        const connection = connectionManager.getMySqlPool(connectionId);
 
         if (!connection) {
             res.status(404).json({ success: false, message: "Connection Not Found" });
@@ -124,7 +124,7 @@ export const downloadReport = async (req: AuthenticatedRequest, res: Response): 
         const runId = String(req.params.runId);
         const format = String(req.query.format || "csv").toLowerCase();
 
-        const connection = connectionManager.get(connectionId);
+        const connection = connectionManager.getMySqlPool(connectionId);
         if (!connection) {
             res.status(404).json({ success: false, message: "Connection Not Found" });
             return;

@@ -1,8 +1,8 @@
 import mysql from "mysql2/promise";
 import { v4 as uuid } from "uuid";
-import schemaService from "../schema/schema.service";
 import mappingService from "../Mapping/mapping.service";
 import runHistoryService from "./runHistory.service";
+import { IConnector } from "../connectors/types";
 
 const BATCH_SIZE = 500;
 
@@ -36,8 +36,8 @@ interface StartedBy {
 
 interface StartParams {
     project: any;
-    sourceConnection: mysql.Pool;
-    destinationConnection: mysql.Pool;
+    sourceConnection: IConnector;
+    destinationConnection: IConnector;
     metadataConnection: mysql.Pool;
     startedBy: StartedBy;
 }
@@ -55,16 +55,6 @@ const applyTransform = (value: any, rule?: string | null) => {
         default:
             return value;
     }
-};
-
-const getPrimaryKeyColumn = async (connection: mysql.Pool, tableName: string): Promise<string | null> => {
-
-    const [rows]: any = await connection.query(
-        `SHOW KEYS FROM \`${tableName}\` WHERE Key_name = 'PRIMARY'`
-    );
-
-    if (rows.length !== 1) return null;
-    return rows[0].Column_name;
 };
 
 class MigrationService {
@@ -138,7 +128,7 @@ class MigrationService {
         return runId;
     }
 
-    private async orderTables(project: any, destinationConnection: mysql.Pool) {
+    private async orderTables(project: any, destinationConnection: IConnector) {
 
         const tables = project.tables;
         const destNames = new Set(tables.map((t: any) => t.destination_table));
@@ -151,7 +141,7 @@ class MigrationService {
         });
 
         for (const t of tables) {
-            const foreignKeys = await schemaService.getForeignKeys(destinationConnection, t.destination_table);
+            const foreignKeys = await destinationConnection.getForeignKeys(t.destination_table);
 
             for (const fk of foreignKeys) {
                 const parent = fk.REFERENCED_TABLE_NAME;
@@ -203,11 +193,8 @@ class MigrationService {
             tableState.status = "running";
 
             try {
-                const sourcePkColumn = await getPrimaryKeyColumn(sourceConnection, table.source_table);
-                const [countRows]: any = await sourceConnection.query(
-                    `SELECT COUNT(*) total FROM \`${table.source_table}\``
-                );
-                const totalRows = countRows[0].total;
+                const sourcePkColumn = await sourceConnection.getPrimaryKeyColumn(table.source_table);
+                const totalRows = await sourceConnection.countRows(table.source_table);
                 tableState.totalRows = totalRows;
 
                 await mappingService.updateTableMappingStatus(
@@ -224,10 +211,7 @@ class MigrationService {
                 let offset = 0;
                 while (true) {
 
-                    const [rows]: any = await sourceConnection.query(
-                        `SELECT * FROM \`${table.source_table}\` LIMIT ? OFFSET ?`,
-                        [BATCH_SIZE, offset]
-                    );
+                    const rows = await sourceConnection.readBatch(table.source_table, BATCH_SIZE, offset);
 
                     if (rows.length === 0) break;
 
@@ -247,14 +231,7 @@ class MigrationService {
                             destRow[col.destination_column] = value;
                         }
 
-                        const columnNames = Object.keys(destRow);
-                        const placeholders = columnNames.map(() => "?").join(", ");
-                        const escapedColumns = columnNames.map((c) => `\`${c}\``).join(", ");
-
-                        const [insertResult]: any = await destinationConnection.execute(
-                            `INSERT INTO \`${table.destination_table}\` (${escapedColumns}) VALUES (${placeholders})`,
-                            columnNames.map((c) => destRow[c])
-                        );
+                        const insertResult = await destinationConnection.insertRow(table.destination_table, destRow);
 
                         if (sourcePkColumn && row[sourcePkColumn] !== undefined) {
                             const newId = insertResult.insertId || row[sourcePkColumn];
