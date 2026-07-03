@@ -66,7 +66,7 @@ export interface TableMappingDraft {
     columns: ColumnMappingDraft[];
 }
 
-export type TableRunStatus = "pending" | "running" | "completed" | "failed" | "skipped";
+export type TableRunStatus = "pending" | "running" | "completed" | "completed_with_errors" | "failed" | "skipped";
 
 export interface TableRunState {
     tableMappingId: number;
@@ -75,16 +75,83 @@ export interface TableRunState {
     status: TableRunStatus;
     totalRows: number;
     migratedRows: number;
+    failedRows: number;
     error: string | null;
 }
 
 export interface MigrationRun {
     runId: string;
     projectId: number;
-    status: "running" | "completed" | "failed";
+    status: "running" | "completed" | "completed_with_errors" | "failed";
     startedAt: string;
     finishedAt: string | null;
     tables: TableRunState[];
+}
+
+export interface ValidationIssue {
+    severity: "error" | "warning";
+    message: string;
+}
+
+export interface TableValidationResult {
+    tableMappingId: number;
+    sourceTable: string;
+    destinationTable: string;
+    issues: ValidationIssue[];
+}
+
+export interface ProjectValidationResult {
+    tables: TableValidationResult[];
+    errorCount: number;
+    warningCount: number;
+}
+
+export interface FailedRow {
+    id: number;
+    migration_run_id: number;
+    table_mapping_id: number;
+    source_table: string;
+    row_identifier: string | null;
+    error_message: string;
+    row_snapshot: string | null;
+    created_at: string;
+}
+
+export interface MigrationProjectSummary {
+    id: number;
+    project_name: string;
+    source_database: string;
+    destination_database: string;
+    created_by_user_id: number;
+    created_by_name: string;
+    created_by_email: string;
+    created_at: string;
+}
+
+export interface ProjectColumnMapping {
+    id: number;
+    table_mapping_id: number;
+    source_column: string;
+    destination_column: string;
+    transform_rule: string | null;
+    lookup_table: string | null;
+    lookup_column: string | null;
+}
+
+export interface ProjectTableMapping {
+    id: number;
+    project_id: number;
+    source_table: string;
+    destination_table: string;
+    status: string;
+    migrated_rows: number;
+    total_rows: number;
+    error_message: string | null;
+    columns: ProjectColumnMapping[];
+}
+
+export interface MigrationProjectDetail extends MigrationProjectSummary {
+    tables: ProjectTableMapping[];
 }
 
 export interface MigrationRunSummary {
@@ -97,7 +164,7 @@ export interface MigrationRunSummary {
     started_by_user_id: number;
     started_by_name: string;
     started_by_email: string;
-    status: "running" | "completed" | "failed";
+    status: "running" | "completed" | "completed_with_errors" | "failed";
     started_at: string;
     finished_at: string | null;
 }

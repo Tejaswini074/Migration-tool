@@ -1,6 +1,6 @@
 import { Response } from "express";
 import connectionManager from "../database/connectionManager";
-import mappingService from "../Mapping/mapping.service";
+import mappingService, { canAccessProject } from "../Mapping/mapping.service";
 import migrationService from "./migration.service";
 import runHistoryService from "./runHistory.service";
 import { buildCsvReport, buildPdfReport } from "./report.service";
@@ -9,14 +9,11 @@ import { AuthenticatedRequest } from "../auth/auth.middleware";
 export const runMigration = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
-
-        const { projectId, sourceConnectionId, destinationConnectionId, metadataConnectionId } = req.body;
-
+        const { projectId, sourceConnectionId, destinationConnectionId, batchSize } = req.body;
         const sourceConnection = connectionManager.get(sourceConnectionId);
         const destinationConnection = connectionManager.get(destinationConnectionId);
-        const metadataConnection = connectionManager.getMySqlPool(metadataConnectionId || destinationConnectionId);
 
-        if (!sourceConnection || !destinationConnection || !metadataConnection) {
+        if (!sourceConnection || !destinationConnection) {
             res.status(404).json({
                 success: false,
                 message: "One or more connections were not found"
@@ -24,12 +21,20 @@ export const runMigration = async (req: AuthenticatedRequest, res: Response): Pr
             return;
         }
 
-        const project = await mappingService.getProjectDetail(metadataConnection, Number(projectId));
+        const project = await mappingService.getProjectDetail(Number(projectId));
 
         if (!project) {
             res.status(404).json({
                 success: false,
                 message: "Project Not Found"
+            });
+            return;
+        }
+
+        if (!canAccessProject(project, req.user!)) {
+            res.status(403).json({
+                success: false,
+                message: "You cannot run another user's project"
             });
             return;
         }
@@ -46,7 +51,7 @@ export const runMigration = async (req: AuthenticatedRequest, res: Response): Pr
             project,
             sourceConnection,
             destinationConnection,
-            metadataConnection,
+            batchSize: batchSize ? Number(batchSize) : undefined,
             startedBy: {
                 userId: req.user!.userId,
                 name: req.user!.name,
@@ -98,14 +103,7 @@ export const getMigrationStatus = async (req: AuthenticatedRequest, res: Respons
 export const getMigrationHistory = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
-        const connectionId = String(req.params.connectionId);
-        const connection = connectionManager.getMySqlPool(connectionId);
-
-        if (!connection) {
-            res.status(404).json({ success: false, message: "Connection Not Found" });
-            return;
-        }
-        const runs = await runHistoryService.listRuns(connection, {
+        const runs = await runHistoryService.listRuns({
             userId: req.user!.userId,
             role: req.user!.role
         });
@@ -117,19 +115,38 @@ export const getMigrationHistory = async (req: AuthenticatedRequest, res: Respon
 
 };
 
+export const getFailedRows = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+
+    try {
+        const runId = String(req.params.runId);
+        const tableMappingId = req.query.tableMappingId ? Number(req.query.tableMappingId) : undefined;
+
+        const run = await runHistoryService.getRun(runId);
+        if (!run) {
+            res.status(404).json({ success: false, message: "Migration Run Not Found" });
+            return;
+        }
+        if (req.user!.role !== "admin" && run.started_by_user_id !== req.user!.userId) {
+            res.status(403).json({ success: false, message: "You cannot access another user's run" });
+            return;
+        }
+
+        const failedRows = await runHistoryService.getFailedRows(run.id, tableMappingId);
+        res.json({ success: true, failedRows });
+
+    } catch (err: any) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+
+};
+
 export const downloadReport = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
-        const connectionId = String(req.params.connectionId);
         const runId = String(req.params.runId);
         const format = String(req.query.format || "csv").toLowerCase();
 
-        const connection = connectionManager.getMySqlPool(connectionId);
-        if (!connection) {
-            res.status(404).json({ success: false, message: "Connection Not Found" });
-            return;
-        }
-        const run = await runHistoryService.getRun(connection, runId);
+        const run = await runHistoryService.getRun(runId);
         if (!run) {
             res.status(404).json({ success: false, message: "Migration Run Not Found" });
             return;

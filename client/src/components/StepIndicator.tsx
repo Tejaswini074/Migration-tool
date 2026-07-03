@@ -1,11 +1,12 @@
-import { Check, Columns3, Plug, Rocket } from "lucide-react";
+import { Check, Columns3, Plug, Rocket, ShieldCheck } from "lucide-react";
 import { cn } from "../lib/cn";
 
-export type WizardStep = "connect" | "mapping" | "migrate";
+export type WizardStep = "connect" | "mapping" | "validate" | "migrate";
 
 const steps: { key: WizardStep; label: string; icon: typeof Plug }[] = [
     { key: "connect", label: "Connect", icon: Plug },
     { key: "mapping", label: "Map", icon: Columns3 },
+    { key: "validate", label: "Validate", icon: ShieldCheck },
     { key: "migrate", label: "Migrate", icon: Rocket }
 ];
 

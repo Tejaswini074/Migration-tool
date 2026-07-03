@@ -1,9 +1,9 @@
-import { ArrowRightLeft, Database, History, LogOut, Users } from "lucide-react";
+import { ArrowRightLeft, Database, FolderKanban, History, LogOut, Users } from "lucide-react";
 import { cn } from "../lib/cn";
 import type { AuthUser } from "../types";
 import ThemeToggle from "./ui/ThemeToggle";
 
-export type View = "wizard" | "history" | "admin";
+export type View = "wizard" | "projects" | "history" | "admin";
 
 interface Props {
     user: AuthUser;
@@ -23,6 +23,7 @@ const initials = (name: string) =>
 export default function Sidebar({ user, view, onNavigate, onLogout }: Props) {
     const navItems: { key: View; label: string; icon: typeof ArrowRightLeft; adminOnly?: boolean }[] = [
         { key: "wizard", label: "Migration", icon: ArrowRightLeft },
+        { key: "projects", label: "Projects", icon: FolderKanban },
         { key: "history", label: "History", icon: History },
         { key: "admin", label: "User Management", icon: Users, adminOnly: true }
     ];

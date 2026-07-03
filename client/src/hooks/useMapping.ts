@@ -130,7 +130,6 @@ export function useMapping(
         setError(null);
         try {
             const projectId = await createProject({
-                connectionId: destination.connectionId,
                 projectName: projectName.trim(),
                 sourceDatabase: source.database,
                 destinationDatabase: destination.database
@@ -138,7 +137,6 @@ export function useMapping(
 
             for (const table of acceptedTables) {
                 const tableMappingId = await saveTableMapping({
-                    connectionId: destination.connectionId,
                     projectId,
                     sourceTable: table.sourceTable,
                     destinationTable: table.destinationTable
@@ -146,7 +144,6 @@ export function useMapping(
 
                 for (const col of table.columns.filter((c) => c.destinationColumn)) {
                     await saveColumnMapping({
-                        connectionId: destination.connectionId,
                         tableMappingId,
                         sourceColumn: col.sourceColumn,
                         destinationColumn: col.destinationColumn,

@@ -1,5 +1,7 @@
-import { CheckCircle2, Server } from "lucide-react";
+import { useState } from "react";
+import { CheckCircle2, ChevronRight, KeyRound, Server } from "lucide-react";
 import { useConnection } from "../hooks/useConnection";
+import { cn } from "../lib/cn";
 import type { ConnectionState } from "../types";
 import Card from "./ui/Card";
 import Input from "./ui/Input";
@@ -13,6 +15,16 @@ interface Props {
 
 export default function ConnectionCard({ label, connection, onConnected }: Props) {
     const { form, handleChange, loading, error, connect } = useConnection(onConnected);
+    const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+    const toggleTable = (tableName: string) => {
+        setExpanded((prev) => {
+            const next = new Set(prev);
+            if (next.has(tableName)) next.delete(tableName);
+            else next.add(tableName);
+            return next;
+        });
+    };
 
     if (connection) {
         return (
@@ -29,6 +41,56 @@ export default function ConnectionCard({ label, connection, onConnected }: Props
                         </p>
                         <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{connection.schema.length} table(s) found</p>
                     </div>
+                </div>
+
+                <div className="mt-4 max-h-72 overflow-y-auto rounded-lg border border-slate-200 dark:border-white/10">
+                    {connection.schema.map((table) => {
+                        const isOpen = expanded.has(table.tableName);
+                        return (
+                            <div key={table.tableName} className="border-b border-slate-100 last:border-b-0 dark:border-white/5">
+                                <button
+                                    type="button"
+                                    onClick={() => toggleTable(table.tableName)}
+                                    className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-white/5"
+                                >
+                                    <span className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+                                        <ChevronRight
+                                            className={cn(
+                                                "h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform dark:text-slate-500",
+                                                isOpen && "rotate-90"
+                                            )}
+                                        />
+                                        {table.tableName}
+                                    </span>
+                                    <span className="shrink-0 text-xs text-slate-400 dark:text-slate-500">
+                                        {table.columns.length} cols &middot; {table.totalRows} rows
+                                    </span>
+                                </button>
+
+                                {isOpen && (
+                                    <div className="bg-slate-50 px-3 py-1.5 dark:bg-white/2">
+                                        {table.columns.map((col) => (
+                                            <div
+                                                key={col.Field}
+                                                className="flex items-center justify-between gap-3 py-1 pl-5 text-xs"
+                                            >
+                                                <span className="flex min-w-0 items-center gap-1.5 text-slate-600 dark:text-slate-400">
+                                                    {col.Key === "PRI" && (
+                                                        <KeyRound className="h-3 w-3 shrink-0 text-amber-500 dark:text-amber-400" />
+                                                    )}
+                                                    <span className="truncate">{col.Field}</span>
+                                                </span>
+                                                <span className="shrink-0 text-slate-400 dark:text-slate-500">
+                                                    {col.Type}
+                                                    {col.Null === "NO" && " · required"}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             </Card>
         );

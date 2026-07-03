@@ -3,18 +3,17 @@ import { downloadMigrationReport, getMigrationHistory } from "../services/dataBr
 import { extractErrorMessage } from "../services/client";
 import type { MigrationRunSummary } from "../types";
 
-export function useMigrationHistory(connectionId: string | null) {
+export function useMigrationHistory() {
     const [runs, setRuns] = useState<MigrationRunSummary[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
 
     const refresh = async () => {
-        if (!connectionId) return;
         setLoading(true);
         setError(null);
         try {
-            setRuns(await getMigrationHistory(connectionId));
+            setRuns(await getMigrationHistory());
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
@@ -24,16 +23,14 @@ export function useMigrationHistory(connectionId: string | null) {
 
     useEffect(() => {
         refresh();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [connectionId]);
+    }, []);
 
     const downloadReport = async (runId: string, format: "csv" | "pdf") => {
-        if (!connectionId) return;
         const key = `${runId}-${format}`;
         setDownloadingKey(key);
         setError(null);
         try {
-            await downloadMigrationReport(connectionId, runId, format);
+            await downloadMigrationReport(runId, format);
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {

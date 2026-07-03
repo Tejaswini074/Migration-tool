@@ -1,28 +1,15 @@
-import { Request, Response } from "express";
-import mappingService from "./mapping.service";
-import connectionManager from "../database/connectionManager";
+import { Response } from "express";
+import mappingService, { canAccessProject } from "./mapping.service";
+import { AuthenticatedRequest } from "../auth/auth.middleware";
 
-const getConnectionOr404 = (connectionId: string, res: Response) => {
-    const connection = connectionManager.getMySqlPool(connectionId);
-    if (!connection) {
-        res.status(404).json({
-            success: false,
-            message: "Connection Not Found"
-        });
-        return null;
-    }
-    return connection;
-};
-
-export const createProject = async (req: Request, res: Response): Promise<void> => {
+export const createProject = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
-
-        const { connectionId } = req.body;
-        const connection = getConnectionOr404(connectionId, res);
-        if (!connection) return;
-
-        const projectId = await mappingService.createProject(connection, req.body);
+        const projectId = await mappingService.createProject(req.body, {
+            userId: req.user!.userId,
+            name: req.user!.name,
+            email: req.user!.email
+        });
 
         res.json({
             success: true,
@@ -38,16 +25,13 @@ export const createProject = async (req: Request, res: Response): Promise<void> 
 
 };
 
-export const getProjects = async (req: Request, res: Response): Promise<void> => {
+export const getProjects = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
-
-        const connectionId = String(req.params.connectionId);
-        const connection = getConnectionOr404(connectionId, res);
-        if (!connection) return;
-
-        const projects = await mappingService.getProjects(connection);
-
+        const projects = await mappingService.getProjects({
+            userId: req.user!.userId,
+            role: req.user!.role
+        });
         res.json({
             success: true,
             projects
@@ -62,21 +46,24 @@ export const getProjects = async (req: Request, res: Response): Promise<void> =>
 
 };
 
-export const getProjectDetail = async (req: Request, res: Response): Promise<void> => {
+export const getProjectDetail = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
-
-        const connectionId = String(req.params.connectionId);
         const projectId = Number(req.params.projectId);
-        const connection = getConnectionOr404(connectionId, res);
-        if (!connection) return;
-
-        const project = await mappingService.getProjectDetail(connection, projectId);
+        const project = await mappingService.getProjectDetail(projectId);
 
         if (!project) {
             res.status(404).json({
                 success: false,
                 message: "Project Not Found"
+            });
+            return;
+        }
+
+        if (!canAccessProject(project, req.user!)) {
+            res.status(403).json({
+                success: false,
+                message: "You cannot access another user's project"
             });
             return;
         }
@@ -95,15 +82,20 @@ export const getProjectDetail = async (req: Request, res: Response): Promise<voi
 
 };
 
-export const saveTableMapping = async (req: Request, res: Response): Promise<void> => {
+export const saveTableMapping = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
+        const project = await mappingService.getProjectDetail(Number(req.body.projectId));
 
-        const { connectionId } = req.body;
-        const connection = getConnectionOr404(connectionId, res);
-        if (!connection) return;
+        if (!project || !canAccessProject(project, req.user!)) {
+            res.status(404).json({
+                success: false,
+                message: "Project Not Found"
+            });
+            return;
+        }
 
-        const tableMappingId = await mappingService.saveTableMapping(connection, req.body);
+        const tableMappingId = await mappingService.saveTableMapping(req.body);
 
         res.json({
             success: true,
@@ -119,15 +111,10 @@ export const saveTableMapping = async (req: Request, res: Response): Promise<voi
 
 };
 
-export const saveColumnMapping = async (req: Request, res: Response): Promise<void> => {
+export const saveColumnMapping = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
-
-        const { connectionId } = req.body;
-        const connection = getConnectionOr404(connectionId, res);
-        if (!connection) return;
-
-        const columnMappingId = await mappingService.saveColumnMapping(connection, req.body);
+        const columnMappingId = await mappingService.saveColumnMapping(req.body);
 
         res.json({
             success: true,

@@ -57,6 +57,8 @@ export interface IConnector {
     readBatch(tableName: string, limit: number, offset: number): Promise<Record<string, any>[]>;
     insertRow(tableName: string, row: Record<string, any>): Promise<InsertResult>;
 
-  
+    countNulls(tableName: string, columnName: string): Promise<number>;
+    countDuplicateValues(tableName: string, columnName: string): Promise<number>;
+
     getNativeHandle(): unknown;
 }

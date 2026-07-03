@@ -1,6 +1,7 @@
 import { useState } from "react";
 import ConnectionCard from "../components/ConnectionCard";
 import MappingReview from "../components/MappingReview";
+import ValidationReport from "../components/ValidationReport";
 import MigrationProgress from "../components/MigrationProgress";
 import StepIndicator, { type WizardStep } from "../components/StepIndicator";
 import type { ConnectionState } from "../types";
@@ -45,8 +46,18 @@ export default function MigrationPage() {
                     destination={destination}
                     onProjectCreated={(id) => {
                         setProjectId(id);
-                        setStep("migrate");
+                        setStep("validate");
                     }}
+                />
+            )}
+
+            {step === "validate" && source && destination && projectId && (
+                <ValidationReport
+                    projectId={projectId}
+                    source={source}
+                    destination={destination}
+                    onBack={() => setStep("mapping")}
+                    onContinue={() => setStep("migrate")}
                 />
             )}
 

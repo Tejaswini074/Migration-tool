@@ -1,12 +1,16 @@
-import mysql from "mysql2/promise";
 import { v4 as uuid } from "uuid";
 import mappingService from "../Mapping/mapping.service";
-import runHistoryService from "./runHistory.service";
+import runHistoryService, { FailedRowInput } from "./runHistory.service";
+import { resolveTableOrder } from "./dependencyOrder";
 import { IConnector } from "../connectors/types";
 
-const BATCH_SIZE = 500;
+const DEFAULT_BATCH_SIZE = 500;
+const MIN_BATCH_SIZE = 50;
+const MAX_BATCH_SIZE = 5000;
+const ROW_RETRY_ATTEMPTS = 2;
+const ROW_RETRY_DELAY_MS = 150;
 
-type Status = "pending" | "running" | "completed" | "failed" | "skipped";
+type Status = "pending" | "running" | "completed" | "completed_with_errors" | "failed" | "skipped";
 
 interface TableRunState {
     tableMappingId: number;
@@ -15,6 +19,7 @@ interface TableRunState {
     status: Status;
     totalRows: number;
     migratedRows: number;
+    failedRows: number;
     error: string | null;
 }
 
@@ -22,7 +27,7 @@ interface RunState {
     runId: string;
     dbId: number;
     projectId: number;
-    status: "running" | "completed" | "failed";
+    status: "running" | "completed" | "completed_with_errors" | "failed";
     startedAt: string;
     finishedAt: string | null;
     tables: TableRunState[];
@@ -38,8 +43,8 @@ interface StartParams {
     project: any;
     sourceConnection: IConnector;
     destinationConnection: IConnector;
-    metadataConnection: mysql.Pool;
     startedBy: StartedBy;
+    batchSize?: number;
 }
 
 const applyTransform = (value: any, rule?: string | null) => {
@@ -55,6 +60,27 @@ const applyTransform = (value: any, rule?: string | null) => {
         default:
             return value;
     }
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const insertWithRetry = async (
+    connector: IConnector, tableName: string,
+    row: Record<string, any>,
+    attempts: number = ROW_RETRY_ATTEMPTS
+) => {
+    let lastError: any;
+
+    for (let attempt = 0; attempt <= attempts; attempt++) {
+        try {
+            return await connector.insertRow(tableName, row);
+        } catch (err) {
+            lastError = err;
+            if (attempt < attempts) await sleep(ROW_RETRY_DELAY_MS * (attempt + 1));
+        }
+    }
+
+    throw lastError;
 };
 
 class MigrationService {
@@ -76,10 +102,11 @@ class MigrationService {
             status: "pending",
             totalRows: 0,
             migratedRows: 0,
+            failedRows: 0,
             error: null
         }));
 
-        const dbId = await runHistoryService.createRun(params.metadataConnection, {
+        const dbId = await runHistoryService.createRun({
             runId,
             projectId: params.project.id,
             projectName: params.project.project_name,
@@ -115,11 +142,10 @@ class MigrationService {
                     table.error = err.message || "Migration stopped unexpectedly";
                 }
             }
-
             console.error("Migration run failed unexpectedly:", err);
 
             try {
-                await runHistoryService.finishRun(params.metadataConnection, runState.dbId, "failed");
+                await runHistoryService.finishRun(runState.dbId, "failed");
             } catch (persistErr) {
                 console.error("Failed to persist run failure:", persistErr);
             }
@@ -128,60 +154,15 @@ class MigrationService {
         return runId;
     }
 
-    private async orderTables(project: any, destinationConnection: IConnector) {
-
-        const tables = project.tables;
-        const destNames = new Set(tables.map((t: any) => t.destination_table));
-        const inDegree = new Map<string, number>();
-        const graph = new Map<string, string[]>();
-
-        tables.forEach((t: any) => {
-            inDegree.set(t.destination_table, 0);
-            graph.set(t.destination_table, []);
-        });
-
-        for (const t of tables) {
-            const foreignKeys = await destinationConnection.getForeignKeys(t.destination_table);
-
-            for (const fk of foreignKeys) {
-                const parent = fk.REFERENCED_TABLE_NAME;
-                if (destNames.has(parent) && parent !== t.destination_table) {
-                    graph.get(parent)!.push(t.destination_table);
-                    inDegree.set(t.destination_table, (inDegree.get(t.destination_table) || 0) + 1);
-                }
-            }
-        }
-
-        const queue: string[] = [];
-        inDegree.forEach((degree, name) => {
-            if (degree === 0) queue.push(name);
-        });
-
-        const order: string[] = [];
-        while (queue.length) {
-            const name = queue.shift()!;
-            order.push(name);
-            (graph.get(name) || []).forEach((child) => {
-                inDegree.set(child, inDegree.get(child)! - 1);
-                if (inDegree.get(child) === 0) queue.push(child);
-            });
-        }
-
-        if (order.length !== tables.length) {
-            return tables;
-        }
-
-        const byName = new Map(tables.map((t: any) => [t.destination_table, t]));
-        return order.map((name) => byName.get(name));
-    }
-
     private async execute(runState: RunState, params: StartParams) {
 
-        const { project, sourceConnection, destinationConnection, metadataConnection } = params;
+        const { project, sourceConnection, destinationConnection } = params;
+        const batchSize = Math.min(MAX_BATCH_SIZE, Math.max(MIN_BATCH_SIZE, params.batchSize || DEFAULT_BATCH_SIZE));
 
-        const orderedTables = await this.orderTables(project, destinationConnection);
+        const { order: orderedTables } = await resolveTableOrder(project.tables, destinationConnection);
         const idMap: Map<string, Map<any, any>> = new Map();
         let anyFailed = false;
+        let anyRowErrors = false;
 
         for (const table of orderedTables) {
             const tableState = runState.tables.find((t) => t.tableMappingId === table.id);
@@ -198,11 +179,11 @@ class MigrationService {
                 tableState.totalRows = totalRows;
 
                 await mappingService.updateTableMappingStatus(
-                    metadataConnection, table.id, "Running",
+                    table.id, "Running",
                     0, totalRows
                 );
                 await runHistoryService.updateRunTable(
-                    metadataConnection, runState.dbId, table.id, "running", 0, totalRows
+                    runState.dbId, table.id, "running", 0, totalRows
                 );
 
                 const destinationIdMap = new Map<any, any>();
@@ -211,9 +192,11 @@ class MigrationService {
                 let offset = 0;
                 while (true) {
 
-                    const rows = await sourceConnection.readBatch(table.source_table, BATCH_SIZE, offset);
+                    const rows = await sourceConnection.readBatch(table.source_table, batchSize, offset);
 
                     if (rows.length === 0) break;
+
+                    const failedRowBatch: FailedRowInput[] = [];
 
                     for (const row of rows) {
                         const destRow: Record<string, any> = {};
@@ -231,40 +214,59 @@ class MigrationService {
                             destRow[col.destination_column] = value;
                         }
 
-                        const insertResult = await destinationConnection.insertRow(table.destination_table, destRow);
+                        try {
+                            const insertResult = await insertWithRetry(destinationConnection, table.destination_table, destRow);
 
-                        if (sourcePkColumn && row[sourcePkColumn] !== undefined) {
-                            const newId = insertResult.insertId || row[sourcePkColumn];
-                            destinationIdMap.set(row[sourcePkColumn], newId);
+                            if (sourcePkColumn && row[sourcePkColumn] !== undefined) {
+                                const newId = insertResult.insertId || row[sourcePkColumn];
+                                destinationIdMap.set(row[sourcePkColumn], newId);
+                            }
+                            tableState.migratedRows++;
+                        } catch (rowErr: any) {
+                            tableState.failedRows++;
+                            failedRowBatch.push({
+                                tableMappingId: table.id,
+                                sourceTable: table.source_table,
+                                rowIdentifier: sourcePkColumn && row[sourcePkColumn] !== undefined ? String(row[sourcePkColumn]) : null,
+                                errorMessage: rowErr.message || "Unknown error",
+                                rowSnapshot: JSON.stringify(destRow)
+                            });
                         }
-                        tableState.migratedRows++;
+                    }
+
+                    if (failedRowBatch.length > 0) {
+                        await runHistoryService.recordFailedRows(runState.dbId, failedRowBatch);
                     }
 
                     await mappingService.updateTableMappingStatus(
-                        metadataConnection,
                         table.id,
                         "Running",
                         tableState.migratedRows,
                         totalRows
                     );
                     await runHistoryService.updateRunTable(
-                        metadataConnection, runState.dbId, table.id, "running", tableState.migratedRows, totalRows
+                        runState.dbId, table.id, "running", tableState.migratedRows, totalRows, null, tableState.failedRows
                     );
 
-                    offset += BATCH_SIZE;
+                    offset += batchSize;
                 }
 
-                tableState.status = "completed";
+                tableState.status = tableState.failedRows > 0 ? "completed_with_errors" : "completed";
+                if (tableState.failedRows > 0) anyRowErrors = true;
+
+                const summaryMessage = tableState.failedRows > 0
+                    ? `${tableState.failedRows} of ${totalRows} row(s) failed and were skipped - see failed rows report`
+                    : null;
+
                 await mappingService.updateTableMappingStatus(
-                    metadataConnection,
                     table.id,
-                    "Completed",
+                    tableState.status === "completed_with_errors" ? "Completed With Errors" : "Completed",
                     tableState.migratedRows,
                     totalRows,
-                    null
+                    summaryMessage
                 );
                 await runHistoryService.updateRunTable(
-                    metadataConnection, runState.dbId, table.id, "completed", tableState.migratedRows, totalRows
+                    runState.dbId, table.id, tableState.status, tableState.migratedRows, totalRows, summaryMessage, tableState.failedRows
                 );
 
             } catch (err: any) {
@@ -273,7 +275,6 @@ class MigrationService {
                 tableState.error = err.message;
 
                 await mappingService.updateTableMappingStatus(
-                    metadataConnection,
                     table.id,
                     "Failed",
                     tableState.migratedRows,
@@ -281,15 +282,15 @@ class MigrationService {
                     err.message
                 );
                 await runHistoryService.updateRunTable(
-                    metadataConnection, runState.dbId, table.id, "failed",
-                    tableState.migratedRows, tableState.totalRows, err.message
+                    runState.dbId, table.id, "failed",
+                    tableState.migratedRows, tableState.totalRows, err.message, tableState.failedRows
                 );
             }
         }
-        runState.status = anyFailed ? "failed" : "completed";
+        runState.status = anyFailed ? "failed" : anyRowErrors ? "completed_with_errors" : "completed";
         runState.finishedAt = new Date().toISOString();
 
-        await runHistoryService.finishRun(metadataConnection, runState.dbId, runState.status);
+        await runHistoryService.finishRun(runState.dbId, runState.status);
     }
 
 }

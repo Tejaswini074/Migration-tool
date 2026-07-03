@@ -2,6 +2,7 @@ import { useState } from "react";
 import Sidebar, { type View } from "../components/Sidebar";
 import { useAuth } from "../hooks/useAuth";
 import MigrationPage from "./MigrationPage";
+import ProjectsPage from "./ProjectsPage";
 import MigrationHistoryPage from "./MigrationHistoryPage";
 import AdminUsersPage from "./AdminUsersPage";
 
@@ -9,6 +10,10 @@ const pageTitles: Record<View, { title: string; subtitle: string }> = {
     wizard: {
         title: "Migrate Data",
         subtitle: "Connect two MySQL databases, review the mapping, and run the migration."
+    },
+    projects: {
+        title: "Projects",
+        subtitle: "Your saved migration projects and their table mappings."
     },
     history: {
         title: "Migration History",
@@ -39,6 +44,7 @@ export default function DashboardPage() {
 
                     {view === "admin" && <AdminUsersPage />}
                     {view === "history" && <MigrationHistoryPage />}
+                    {view === "projects" && <ProjectsPage />}
                     {view === "wizard" && <MigrationPage />}
                 </div>
             </div>

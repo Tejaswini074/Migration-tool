@@ -37,7 +37,7 @@ export const buildCsvReport = (run: any): string => {
     ]);
     csv += "\r\n";
 
-    csv += csvRow(["Source Table", "Destination Table", "Status", "Total Rows", "Migrated Rows", "Error"]);
+    csv += csvRow(["Source Table", "Destination Table", "Status", "Total Rows", "Migrated Rows", "Failed Rows", "Error"]);
     for (const t of run.tables) {
         csv += csvRow([
             t.source_table,
@@ -45,6 +45,7 @@ export const buildCsvReport = (run: any): string => {
             t.status,
             t.total_rows,
             t.migrated_rows,
+            t.failed_rows ?? 0,
             t.error_message ?? ""
         ]);
     }
@@ -89,8 +90,8 @@ export const buildPdfReport = (run: any): Promise<Buffer> => {
         doc.fontSize(13).font("Helvetica-Bold").text("Table Detail");
         doc.moveDown(0.5);
 
-        const colWidths = [110, 110, 70, 70, 80, 110];
-        const headers = ["Source", "Destination", "Status", "Total", "Migrated", "Error"];
+        const colWidths = [95, 95, 65, 55, 60, 50, 95];
+        const headers = ["Source", "Destination", "Status", "Total", "Migrated", "Failed", "Error"];
         const startX = doc.x;
         let y = doc.y;
 
@@ -110,6 +111,7 @@ export const buildPdfReport = (run: any): Promise<Buffer> => {
                 t.status,
                 String(t.total_rows),
                 String(t.migrated_rows),
+                String(t.failed_rows ?? 0),
                 t.error_message ?? ""
             ];
 

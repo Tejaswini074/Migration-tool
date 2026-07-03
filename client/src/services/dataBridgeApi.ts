@@ -1,5 +1,14 @@
 import { apiClient } from "./client";
-import type { MigrationRunSummary, MigrationRun, TableRecommendation, TableSchema } from "../types";
+import type {
+    MigrationRunSummary,
+    MigrationRun,
+    MigrationProjectSummary,
+    MigrationProjectDetail,
+    ProjectValidationResult,
+    FailedRow,
+    TableRecommendation,
+    TableSchema
+} from "../types";
 
 export interface ConnectPayload {
     host: string;
@@ -40,7 +49,6 @@ export const recommendTables = async (sourceConnectionId: string, destinationCon
 };
 
 export const createProject = async (payload: {
-    connectionId: string;
     projectName: string;
     sourceDatabase: string;
     destinationDatabase: string;
@@ -52,8 +60,21 @@ export const createProject = async (payload: {
     return data.projectId;
 };
 
+export const getProjects = async () => {
+    const { data } = await apiClient.get<{ success: boolean; projects: MigrationProjectSummary[] }>(
+        "/mapping/projects"
+    );
+    return data.projects;
+};
+
+export const getProjectDetail = async (projectId: number) => {
+    const { data } = await apiClient.get<{ success: boolean; project: MigrationProjectDetail }>(
+        `/mapping/project/${projectId}`
+    );
+    return data.project;
+};
+
 export const saveTableMapping = async (payload: {
-    connectionId: string;
     projectId: number;
     sourceTable: string;
     destinationTable: string;
@@ -66,7 +87,6 @@ export const saveTableMapping = async (payload: {
 };
 
 export const saveColumnMapping = async (payload: {
-    connectionId: string;
     tableMappingId: number;
     sourceColumn: string;
     destinationColumn: string;
@@ -79,17 +99,37 @@ export const saveColumnMapping = async (payload: {
     return data.columnMappingId;
 };
 
+export const validateProject = async (payload: {
+    projectId: number;
+    sourceConnectionId: string;
+    destinationConnectionId: string;
+}) => {
+    const { data } = await apiClient.post<{ success: boolean; result: ProjectValidationResult }>(
+        "/validation/project",
+        payload
+    );
+    return data.result;
+};
+
 export const runMigration = async (payload: {
     projectId: number;
     sourceConnectionId: string;
     destinationConnectionId: string;
-    metadataConnectionId: string;
+    batchSize?: number;
 }) => {
     const { data } = await apiClient.post<{ success: boolean; runId: string }>(
         "/migration/run",
         payload
     );
     return data.runId;
+};
+
+export const getFailedRows = async (runId: string, tableMappingId?: number) => {
+    const { data } = await apiClient.get<{ success: boolean; failedRows: FailedRow[] }>(
+        `/migration/failed-rows/${runId}`,
+        { params: tableMappingId ? { tableMappingId } : {} }
+    );
+    return data.failedRows;
 };
 
 export const getMigrationStatus = async (runId: string) => {
@@ -99,19 +139,15 @@ export const getMigrationStatus = async (runId: string) => {
     return data.run;
 };
 
-export const getMigrationHistory = async (connectionId: string) => {
+export const getMigrationHistory = async () => {
     const { data } = await apiClient.get<{ success: boolean; runs: MigrationRunSummary[] }>(
-        `/migration/history/${connectionId}`
+        "/migration/history"
     );
     return data.runs;
 };
 
-export const downloadMigrationReport = async (
-    connectionId: string,
-    runId: string,
-    format: "csv" | "pdf"
-) => {
-    const response = await apiClient.get(`/migration/report/${connectionId}/${runId}`, {
+export const downloadMigrationReport = async (runId: string, format: "csv" | "pdf") => {
+    const response = await apiClient.get(`/migration/report/${runId}`, {
         params: { format },
         responseType: "blob"
     });

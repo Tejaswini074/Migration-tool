@@ -47,24 +47,19 @@ export const register = async (req: AuthenticatedRequest, res: Response): Promis
     }
 };
 
-// Open self-registration: anyone can create their own account (always role "user").
-// Distinct from register() above, which only ever creates the first (admin) account.
+
 export const signup = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    
 
     try {
-
         const { name, email, password } = req.body;
-
         if (!name || !email || !password) {
             res.status(400).json({ success: false, message: "Name, email and password are required" });
             return;
         }
-
         const userId = await authService.createUser({ name, email, password, role: "user" });
         const token = signToken({ userId, name, email, role: "user" });
-
         res.json({ success: true, token, user: { id: userId, name, email, role: "user" } });
-
     } catch (err: any) {
         res.status(400).json({ success: false, message: err.message });
     }

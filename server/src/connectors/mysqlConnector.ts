@@ -103,6 +103,14 @@ export class MySqlConnector implements IConnector {
 
     async insertRow(tableName: string, row: Record<string, any>): Promise<InsertResult> {
         const columnNames = Object.keys(row);
+
+        if (columnNames.length === 0) {
+            // MySQL treats `INSERT INTO t () VALUES ()` as "insert a row of defaults" rather
+            // than an error, which would otherwise silently insert blank rows for tables with
+            // no mapped columns instead of surfacing a clear per-row failure.
+            throw new Error("No columns are mapped for this table - nothing to insert");
+        }
+
         const placeholders = columnNames.map(() => "?").join(", ");
         const escapedColumns = columnNames.map((c) => `\`${c}\``).join(", ");
 
@@ -112,5 +120,24 @@ export class MySqlConnector implements IConnector {
         );
 
         return { insertId: result.insertId };
+    }
+
+    async countNulls(tableName: string, columnName: string): Promise<number> {
+        const [rows]: any = await this.pool.query(
+            `SELECT COUNT(*) total FROM \`${tableName}\` WHERE \`${columnName}\` IS NULL`
+        );
+        return rows[0].total;
+    }
+
+    async countDuplicateValues(tableName: string, columnName: string): Promise<number> {
+        const [rows]: any = await this.pool.query(
+            `SELECT COUNT(*) total FROM (
+                SELECT \`${columnName}\` FROM \`${tableName}\`
+                WHERE \`${columnName}\` IS NOT NULL
+                GROUP BY \`${columnName}\`
+                HAVING COUNT(*) > 1
+             ) dupes`
+        );
+        return rows[0].total;
     }
 }

@@ -21,12 +21,6 @@ class ConnectionManager {
         return this.connections;
     }
 
-    /**
-     * Platform metadata (projects, table/column mappings, run history) is
-     * stored as plain MySQL DDL/DML and is out of scope for the connector
-     * abstraction. This is the one place that steps outside IConnector to
-     * fetch the underlying pool for that purpose.
-     */
     getMySqlPool(id: string): mysql.Pool | null {
         const connector = this.connections.get(id);
         if (!connector || connector.type !== "mysql") return null;

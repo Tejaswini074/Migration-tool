@@ -1,8 +1,5 @@
-import { useState } from "react";
 import { Download } from "lucide-react";
-import ConnectionCard from "../components/ConnectionCard";
 import { useMigrationHistory } from "../hooks/useMigrationHistory";
-import type { ConnectionState } from "../types";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
@@ -11,22 +8,7 @@ const statusTone = (status: string) =>
     status === "completed" ? "green" : status === "failed" ? "red" : "blue";
 
 export default function MigrationHistoryPage() {
-    const [connection, setConnection] = useState<ConnectionState | null>(null);
-    const { runs, loading, error, downloadingKey, downloadReport } = useMigrationHistory(
-        connection?.connectionId ?? null
-    );
-
-    if (!connection) {
-        return (
-            <div className="max-w-md">
-                <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-                    Connect to the database where a migration project's mapping data lives to view its run
-                    history.
-                </p>
-                <ConnectionCard label="Metadata database" connection={connection} onConnected={setConnection} />
-            </div>
-        );
-    }
+    const { runs, loading, error, downloadingKey, downloadReport } = useMigrationHistory();
 
     return (
         <div className="flex flex-col gap-5">
