@@ -96,6 +96,31 @@ export const getMigrationStatus = async (req: AuthenticatedRequest, res: Respons
 
 };
 
+export const cancelMigration = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+
+    try {
+        const runId = String(req.params.runId);
+
+        const access = await runHistoryService.getAccessibleRun(runId, req.user!);
+        if (!access.ok) {
+            res.status(access.status).json({ success: false, message: access.message });
+            return;
+        }
+
+        const cancelled = migrationService.cancel(runId);
+        if (!cancelled) {
+            res.status(400).json({ success: false, message: "This run is not currently in progress" });
+            return;
+        }
+
+        res.json({ success: true, message: "Cancellation requested" });
+
+    } catch (err: any) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+
+};
+
 export const getMigrationStats = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {

@@ -9,7 +9,7 @@ export interface NotificationSettings {
 interface RunFinishedInfo {
     runId: string;
     projectName: string;
-    status: "completed" | "completed_with_errors" | "failed";
+    status: "completed" | "completed_with_errors" | "failed" | "cancelled";
     startedByUserId: number;
     totalRows: number;
     migratedRows: number;

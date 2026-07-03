@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getProjectDetail, getProjects } from "../services/dataBridgeApi";
+import { deleteProject, getProjectDetail, getProjects } from "../services/dataBridgeApi";
 import { extractErrorMessage } from "../services/client";
 import type { MigrationProjectDetail, MigrationProjectSummary } from "../types";
 
@@ -7,6 +7,7 @@ export function useProjects() {
     const [projects, setProjects] = useState<MigrationProjectSummary[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<number | null>(null);
 
     const refresh = async () => {
         setLoading(true);
@@ -24,7 +25,20 @@ export function useProjects() {
         refresh();
     }, []);
 
-    return { projects, loading, error, refresh };
+    const handleDelete = async (projectId: number) => {
+        setDeletingId(projectId);
+        setError(null);
+        try {
+            await deleteProject(projectId);
+            await refresh();
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
+    return { projects, loading, error, refresh, deletingId, handleDelete };
 }
 
 export function useProjectDetail(projectId: number) {

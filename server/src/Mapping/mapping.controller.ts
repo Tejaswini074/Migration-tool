@@ -77,6 +77,33 @@ export const getProjectDetail = async (req: AuthenticatedRequest, res: Response)
 
 };
 
+export const deleteProject = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+
+    try {
+        const projectId = Number(req.params.projectId);
+        const access = await mappingService.getAccessibleProject(projectId, req.user!);
+
+        if (!access.ok) {
+            res.status(access.status).json({
+                success: false,
+                message: access.message
+            });
+            return;
+        }
+
+        await mappingService.deleteProject(projectId);
+
+        res.json({ success: true });
+
+    } catch (err: any) {
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
+
+};
+
 export const saveTableMapping = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {

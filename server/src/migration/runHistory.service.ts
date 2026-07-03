@@ -196,7 +196,7 @@ class RunHistoryService {
         return rows;
     }
 
-    async finishRun(migrationRunId: number, status: "completed" | "completed_with_errors" | "failed") {
+    async finishRun(migrationRunId: number, status: "completed" | "completed_with_errors" | "failed" | "cancelled") {
         const db = getAppDatabase();
 
         await db.execute(

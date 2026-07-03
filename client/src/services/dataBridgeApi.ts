@@ -72,6 +72,10 @@ export const getProjects = async () => {
     return data.projects;
 };
 
+export const deleteProject = async (projectId: number) => {
+    await apiClient.delete(`/mapping/project/${projectId}`);
+};
+
 export const getProjectDetail = async (projectId: number) => {
     const { data } = await apiClient.get<{ success: boolean; project: MigrationProjectDetail }>(
         `/mapping/project/${projectId}`

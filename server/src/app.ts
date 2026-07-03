@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import dotenv from "dotenv";
 
+import { getAppDatabase } from "./config/appDatabase";
 import databaseRoutes from "./database/database.routes";
 import schemaRoutes from "./schema/schema.routes";
 import recommendationRoutes from "./recommendation/recommendation.routes";
@@ -33,6 +34,15 @@ app.use(express.json());
 
 app.get("/", (req, res) => {
     res.send("DataBridge Backend Running...");
+});
+
+app.get("/api/health", async (req, res) => {
+    try {
+        await getAppDatabase().query("SELECT 1");
+        res.status(200).json({ status: "ok", database: "connected" });
+    } catch (err: any) {
+        res.status(503).json({ status: "error", database: "disconnected", message: err.message });
+    }
 });
 
 app.use("/api/auth", authRoutes);

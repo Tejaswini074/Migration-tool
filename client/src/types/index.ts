@@ -85,7 +85,7 @@ export interface TableMappingDraft {
     highWaterColumn: string | null;
 }
 
-export type TableRunStatus = "pending" | "running" | "completed" | "completed_with_errors" | "failed" | "skipped";
+export type TableRunStatus = "pending" | "running" | "completed" | "completed_with_errors" | "failed" | "skipped" | "cancelled";
 
 export interface TableRunState {
     tableMappingId: number;

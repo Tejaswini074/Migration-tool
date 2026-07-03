@@ -12,7 +12,7 @@ const MAX_BATCH_SIZE = 5000;
 const ROW_RETRY_ATTEMPTS = 2;
 const ROW_RETRY_DELAY_MS = 150;
 
-type Status = "pending" | "running" | "completed" | "completed_with_errors" | "failed" | "skipped";
+type Status = "pending" | "running" | "completed" | "completed_with_errors" | "failed" | "skipped" | "cancelled";
 
 interface TableRunState {
     tableMappingId: number;
@@ -29,10 +29,11 @@ interface RunState {
     runId: string;
     dbId: number;
     projectId: number;
-    status: "running" | "completed" | "completed_with_errors" | "failed";
+    status: "running" | "completed" | "completed_with_errors" | "failed" | "cancelled";
     startedAt: string;
     finishedAt: string | null;
     tables: TableRunState[];
+    cancelRequested: boolean;
 }
 
 interface StartedBy {
@@ -79,6 +80,14 @@ class MigrationService {
         return this.runs.get(runId);
     }
 
+    /** Flags a running migration to stop at the next safe checkpoint (between batches/tables). */
+    cancel(runId: string): boolean {
+        const runState = this.runs.get(runId);
+        if (!runState || runState.status !== "running") return false;
+        runState.cancelRequested = true;
+        return true;
+    }
+
     async start(params: StartParams): Promise<string> {
 
         const runId = uuid();
@@ -115,7 +124,8 @@ class MigrationService {
             status: "running",
             startedAt: new Date().toISOString(),
             finishedAt: null,
-            tables
+            tables,
+            cancelRequested: false
         };
 
         this.runs.set(runId, runState);
@@ -157,7 +167,8 @@ class MigrationService {
         notificationService.notifyRunFinished({
             runId: runState.runId,
             projectName,
-            status: runState.status as "completed" | "completed_with_errors" | "failed",
+            // Only ever called after runState.status has moved off "running" to a terminal value.
+            status: runState.status as "completed" | "completed_with_errors" | "failed" | "cancelled",
             startedByUserId,
             ...totals
         });
@@ -172,8 +183,14 @@ class MigrationService {
         const idMap: Map<string, Map<any, any>> = new Map();
         let anyFailed = false;
         let anyRowErrors = false;
+        let wasCancelled = false;
 
         for (const table of orderedTables) {
+            if (runState.cancelRequested) {
+                wasCancelled = true;
+                break;
+            }
+
             const tableState = runState.tables.find((t) => t.tableMappingId === table.id);
             if (!tableState) {
                 console.error(`Migration: no run-state entry for table_mapping ${table.id}, skipping`);
@@ -268,10 +285,25 @@ class MigrationService {
                         cursor = rows[rows.length - 1][table.high_water_column];
                     }
                     offset += batchSize;
+
+                    if (runState.cancelRequested) break;
                 }
 
                 if (incrementalMode && cursor !== null && cursor !== undefined) {
                     await mappingService.updateTableHighWaterValue(table.id, cursor);
+                }
+
+                if (runState.cancelRequested) {
+                    wasCancelled = true;
+                    tableState.status = "cancelled";
+
+                    await mappingService.updateTableMappingStatus(
+                        table.id, "Cancelled", tableState.migratedRows, totalRows, "Migration was cancelled"
+                    );
+                    await runHistoryService.updateRunTable(
+                        runState.dbId, table.id, "cancelled", tableState.migratedRows, totalRows, "Migration was cancelled", tableState.failedRows
+                    );
+                    break;
                 }
 
                 tableState.status = tableState.failedRows > 0 ? "completed_with_errors" : "completed";
@@ -310,7 +342,14 @@ class MigrationService {
                 );
             }
         }
-        runState.status = anyFailed ? "failed" : anyRowErrors ? "completed_with_errors" : "completed";
+        if (wasCancelled) {
+            for (const tableState of runState.tables) {
+                if (tableState.status === "pending") tableState.status = "cancelled";
+            }
+            runState.status = "cancelled";
+        } else {
+            runState.status = anyFailed ? "failed" : anyRowErrors ? "completed_with_errors" : "completed";
+        }
         runState.finishedAt = new Date().toISOString();
 
         await runHistoryService.finishRun(runState.dbId, runState.status);

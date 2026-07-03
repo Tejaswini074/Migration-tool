@@ -188,6 +188,18 @@ class MappingService {
         return { ok: true, tableMapping };
     }
 
+    /**
+     * table_mapping/column_mapping/migration_schedules all cascade off project_id via their
+     * own FOREIGN KEY ... ON DELETE CASCADE. migration_runs has no FK back to this table and
+     * already denormalizes project_name/source_database/destination_database onto each run -
+     * run history is meant to survive its project being deleted.
+     */
+    async deleteProject(projectId: number) {
+        await this.ensureTables();
+        const db = getAppDatabase();
+        await db.execute(`DELETE FROM migration_projects WHERE id = ?`, [projectId]);
+    }
+
     async saveTableMapping(data: { projectId: number; sourceTable: string; destinationTable: string }) {
 
         await this.ensureTables();

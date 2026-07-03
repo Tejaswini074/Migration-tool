@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ArrowLeft, ArrowRight, Database, FolderKanban, Play } from "lucide-react";
+import { useState, type MouseEvent } from "react";
+import { ArrowLeft, ArrowRight, Database, FolderKanban, Play, Trash2 } from "lucide-react";
 import { useProjectDetail, useProjects } from "../hooks/useProjects";
 import ConnectionCard from "../components/ConnectionCard";
 import ValidationReport from "../components/ValidationReport";
@@ -20,7 +20,14 @@ export default function ProjectsPage() {
 }
 
 function ProjectList({ onOpen }: { onOpen: (id: number) => void }) {
-    const { projects, loading, error } = useProjects();
+    const { projects, loading, error, deletingId, handleDelete } = useProjects();
+
+    const confirmDelete = (e: MouseEvent, projectId: number, projectName: string) => {
+        e.stopPropagation();
+        if (window.confirm(`Delete "${projectName}"? Its table mappings and any schedules will be removed too. Migration history is kept.`)) {
+            handleDelete(projectId);
+        }
+    };
 
     return (
         <div className="flex flex-col gap-5">
@@ -83,10 +90,21 @@ function ProjectList({ onOpen }: { onOpen: (id: number) => void }) {
                                         {new Date(p.created_at).toLocaleString()}
                                     </td>
                                     <td className="px-6 py-3.5 text-right">
-                                        <span className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 transition-transform group-hover:translate-x-0.5 dark:text-indigo-400">
-                                            Open
-                                            <ArrowRight className="h-3.5 w-3.5" />
-                                        </span>
+                                        <div className="flex items-center justify-end gap-3">
+                                            <button
+                                                type="button"
+                                                disabled={deletingId === p.id}
+                                                onClick={(e) => confirmDelete(e, p.id, p.project_name)}
+                                                title="Delete project"
+                                                className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-500 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                            <span className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 transition-transform group-hover:translate-x-0.5 dark:text-indigo-400">
+                                                Open
+                                                <ArrowRight className="h-3.5 w-3.5" />
+                                            </span>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
