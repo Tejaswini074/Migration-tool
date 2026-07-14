@@ -1,9 +1,11 @@
 import { Response } from "express";
 import { v4 as uuid } from "uuid";
+import { parse } from "csv-parse/sync";
 import connectionManager from "./connectionManager";
-import { createConnector } from "../connectors/connectorFactory";
+import { createConnector, createCsvConnector } from "../connectors/connectorFactory";
 import { ConnectorType } from "../connectors/types";
 import { AuthenticatedRequest } from "../auth/auth.middleware";
+import { AuthenticatedFileRequest } from "./csvUpload";
 
 
 export const connectDatabase = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -39,6 +41,53 @@ export const connectDatabase = async (req: AuthenticatedRequest, res: Response):
 
     } catch (error: any) {
 
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+export const connectCsv = async (req: AuthenticatedFileRequest, res: Response): Promise<void> => {
+
+    try {
+        if (!req.file) {
+            res.status(400).json({ success: false, message: "A CSV file is required" });
+            return;
+        }
+
+        let rows: Record<string, string>[];
+        try {
+            rows = parse(req.file.buffer, {
+                columns: true,
+                skip_empty_lines: true,
+                trim: true,
+                bom: true
+            });
+        } catch (parseErr: any) {
+            res.status(400).json({ success: false, message: `Could not parse CSV: ${parseErr.message}` });
+            return;
+        }
+
+        const tableName = req.file.originalname.replace(/\.csv$/i, "");
+        const connector = createCsvConnector(tableName, rows);
+        await connector.testConnection();
+
+        const connectionId = uuid();
+        connectionManager.add(connectionId, connector, req.user!.userId);
+
+        const [table] = await connector.getTables();
+
+        res.status(200).json({
+            success: true,
+            connectionId,
+            database: req.file.originalname,
+            type: connector.type,
+            tableName: table.tableName,
+            message: "CSV Connected Successfully"
+        });
+
+    } catch (error: any) {
         res.status(500).json({
             success: false,
             message: error.message

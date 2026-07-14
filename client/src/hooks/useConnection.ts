@@ -1,11 +1,13 @@
 import { useState, type ChangeEvent } from "react";
-import { connectDatabase, getDatabaseSchema } from "../services/dataBridgeApi";
+import { connectCsv, connectDatabase, getDatabaseSchema } from "../services/dataBridgeApi";
 import { extractErrorMessage } from "../services/client";
-import type { ConnectionState, ConnectorType } from "../types";
+import type { ConnectionState } from "../types";
 
-const defaultPort: Record<ConnectorType, string> = { mysql: "3306", postgres: "5432" };
+type DatabaseConnectorType = "mysql" | "postgres";
 
-const initialForm = { host: "localhost", port: defaultPort.mysql, user: "root", password: "", database: "", type: "mysql" as ConnectorType };
+const defaultPort: Record<DatabaseConnectorType, string> = { mysql: "3306", postgres: "5432" };
+
+const initialForm = { host: "localhost", port: defaultPort.mysql, user: "root", password: "", database: "", type: "mysql" as DatabaseConnectorType };
 
 export function useConnection(onConnected: (state: ConnectionState) => void) {
     const [form, setForm] = useState(initialForm);
@@ -16,7 +18,7 @@ export function useConnection(onConnected: (state: ConnectionState) => void) {
         setForm((f) => ({ ...f, [field]: e.target.value }));
     };
 
-    const setType = (type: ConnectorType) => {
+    const setType = (type: DatabaseConnectorType) => {
         setForm((f) => ({ ...f, type, port: f.port === defaultPort[f.type] ? defaultPort[type] : f.port }));
     };
 
@@ -41,5 +43,26 @@ export function useConnection(onConnected: (state: ConnectionState) => void) {
         }
     };
 
-    return { form, handleChange, setType, loading, error, connect };
+    const connectFile = async (file: File) => {
+        setLoading(true);
+        setError(null);
+        try {
+            const result = await connectCsv(file);
+            const schema = await getDatabaseSchema(result.connectionId);
+            onConnected({
+                connectionId: result.connectionId,
+                database: result.database,
+                host: "",
+                port: "",
+                type: result.type,
+                schema
+            });
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return { form, handleChange, setType, loading, error, connect, connectFile };
 }

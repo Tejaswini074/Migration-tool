@@ -1,12 +1,14 @@
-import { useState } from "react";
-import { CalendarClock, Pause, Play, Plus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CalendarClock, Pause, Play, Plus, Search, Trash2 } from "lucide-react";
 import { useSchedules } from "../hooks/useSchedules";
 import { useProjects } from "../hooks/useProjects";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Select from "../components/ui/Select";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
+import Pagination from "../components/ui/Pagination";
 import type { ScheduleConnectionConfig } from "../types";
 
 const CRON_PRESETS: { label: string; value: string }[] = [
@@ -62,8 +64,18 @@ function CredentialFields({ label, value, onChange }: {
 }
 
 export default function SchedulesPage() {
-    const { schedules, loading, error, busyId, handleCreate, handleToggle, handleDelete, handleRunNow } = useSchedules();
+    const {
+        schedules, total, loading, error, busyId, handleCreate, handleToggle, handleDelete, handleRunNow,
+        search, setSearch, page, setPage, pageSize
+    } = useSchedules();
     const { projects } = useProjects();
+    const [searchInput, setSearchInput] = useState("");
+    const debouncedSearch = useDebouncedValue(searchInput);
+
+    useEffect(() => {
+        setSearch(debouncedSearch);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [debouncedSearch]);
 
     const [showForm, setShowForm] = useState(false);
     const [projectId, setProjectId] = useState("");
@@ -99,13 +111,24 @@ export default function SchedulesPage() {
         <div className="flex flex-col gap-5">
             {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
+            <div className="flex items-center justify-between gap-3">
+                <div className="max-w-xs flex-1">
+                    <Input
+                        placeholder="Search by project..."
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                        rightSlot={<Search className="h-4 w-4 text-slate-400 dark:text-slate-500" />}
+                    />
+                </div>
+                <Button size="sm" onClick={() => setShowForm((v) => !v)}>
+                    <Plus className="h-3.5 w-3.5" />
+                    New schedule
+                </Button>
+            </div>
+
             <Card className="p-0">
                 <div className="flex items-center justify-between px-6 pt-6">
-                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Schedules ({schedules.length})</h3>
-                    <Button size="sm" onClick={() => setShowForm((v) => !v)}>
-                        <Plus className="h-3.5 w-3.5" />
-                        New schedule
-                    </Button>
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Schedules ({total})</h3>
                 </div>
 
                 {loading ? (
@@ -115,9 +138,11 @@ export default function SchedulesPage() {
                         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-white/5">
                             <CalendarClock className="h-5 w-5 text-slate-400 dark:text-slate-500" />
                         </div>
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">No schedules yet</p>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                            {search ? "No schedules match your search" : "No schedules yet"}
+                        </p>
                         <p className="-mt-2 text-sm text-slate-500 dark:text-slate-400">
-                            Create one to run a project automatically on a recurring basis.
+                            {search ? "Try a different search term." : "Create one to run a project automatically on a recurring basis."}
                         </p>
                     </div>
                 ) : (
@@ -178,7 +203,7 @@ export default function SchedulesPage() {
                         </tbody>
                     </table>
                 )}
-                <div className="h-6" />
+                <Pagination page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
             </Card>
 
             {showForm && (

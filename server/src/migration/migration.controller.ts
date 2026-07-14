@@ -139,11 +139,16 @@ export const getMigrationStats = async (req: AuthenticatedRequest, res: Response
 export const getMigrationHistory = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
-        const runs = await runHistoryService.listRuns({
-            userId: req.user!.userId,
-            role: req.user!.role
-        });
-        res.json({ success: true, runs });
+        const { search, page, pageSize } = req.query;
+        const { items, total } = await runHistoryService.listRuns(
+            { userId: req.user!.userId, role: req.user!.role },
+            {
+                search: search ? String(search) : undefined,
+                page: page ? Number(page) : undefined,
+                pageSize: pageSize ? Number(pageSize) : undefined
+            }
+        );
+        res.json({ success: true, runs: items, total });
 
     } catch (err: any) {
         res.status(500).json({ success: false, message: err.message });

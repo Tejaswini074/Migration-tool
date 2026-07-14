@@ -103,18 +103,45 @@ class MappingService {
         return result.insertId;
     }
 
-    async getProjects(requester: Requester) {
+    /**
+     * page/pageSize are optional so this can serve both the paginated Projects list and
+     * unpaginated consumers (the Schedules project picker, the Overview stats project count)
+     * with a single method - omitting them just returns everything as `items`.
+     */
+    async getProjects(requester: Requester, options?: { search?: string; page?: number; pageSize?: number }) {
         await this.ensureTables();
         const db = getAppDatabase();
         const isAdmin = requester.role === "admin";
 
-        const [rows]: any = await db.query(
-            isAdmin
-                ? "SELECT * FROM migration_projects ORDER BY created_at DESC"
-                : "SELECT * FROM migration_projects WHERE created_by_user_id = ? ORDER BY created_at DESC",
-            isAdmin ? [] : [requester.userId]
+        const conditions: string[] = [];
+        const params: any[] = [];
+
+        if (!isAdmin) {
+            conditions.push("created_by_user_id = ?");
+            params.push(requester.userId);
+        }
+        if (options?.search) {
+            conditions.push("project_name LIKE ?");
+            params.push(`%${options.search}%`);
+        }
+
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+        const [countRows]: any = await db.query(
+            `SELECT COUNT(*) total FROM migration_projects ${whereClause}`,
+            params
         );
-        return rows;
+        const total = countRows[0].total;
+
+        let sql = `SELECT * FROM migration_projects ${whereClause} ORDER BY created_at DESC`;
+        const queryParams = [...params];
+        if (options?.page && options?.pageSize) {
+            sql += ` LIMIT ? OFFSET ?`;
+            queryParams.push(options.pageSize, (options.page - 1) * options.pageSize);
+        }
+
+        const [rows]: any = await db.query(sql, queryParams);
+        return { items: rows, total };
     }
 
     async getProjectDetail(projectId: number) {

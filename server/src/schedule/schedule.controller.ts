@@ -35,10 +35,16 @@ export const createSchedule = async (req: AuthenticatedRequest, res: Response): 
 
 export const listSchedules = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-        const schedules = await scheduleService.listSchedules({
-            userId: req.user!.userId, role: req.user!.role, name: req.user!.name
-        });
-        res.json({ success: true, schedules });
+        const { search, page, pageSize } = req.query;
+        const { items, total } = await scheduleService.listSchedules(
+            { userId: req.user!.userId, role: req.user!.role, name: req.user!.name },
+            {
+                search: search ? String(search) : undefined,
+                page: page ? Number(page) : undefined,
+                pageSize: pageSize ? Number(pageSize) : undefined
+            }
+        );
+        res.json({ success: true, schedules: items, total });
     } catch (err: any) {
         respondToError(res, err);
     }

@@ -33,6 +33,60 @@ export const parseTransformRule = (raw?: string | null): TransformRule | null =>
     }
 };
 
+/**
+ * Static ReDoS heuristic: flags a quantified group (`(...)+`, `(...)*`, `(...){2,}`) whose
+ * own contents contain another unbounded quantifier - the classic "nested quantifier" shape
+ * behind catastrophic backtracking (e.g. `(a+)+`, `([a-zA-Z]+)*`). This doesn't execute the
+ * pattern, just inspects its source, so it can't itself become a DoS vector. It's a heuristic,
+ * not a full ReDoS detector - alternation-based blowups like `(a|a)+` aren't caught.
+ */
+/** True if `str[idx]` starts a `+`, `*`, or unbounded `{n,}` quantifier. */
+const isUnboundedQuantifierAt = (str: string, idx: number): boolean => {
+    if (str[idx] === "+" || str[idx] === "*") return true;
+    if (str[idx] === "{") {
+        const close = str.indexOf("}", idx);
+        if (close === -1) return false;
+        const inside = str.slice(idx + 1, close);
+        return /^\d*,\s*\d*$/.test(inside) && inside.includes(",");
+    }
+    return false;
+};
+
+const hasNestedUnboundedQuantifier = (pattern: string): boolean => {
+    const groups: { start: number; end: number }[] = [];
+    const stack: number[] = [];
+
+    for (let i = 0; i < pattern.length; i++) {
+        const ch = pattern[i];
+        if (ch === "\\") {
+            i++;
+            continue;
+        }
+        if (ch === "(") {
+            stack.push(i);
+        } else if (ch === ")") {
+            const start = stack.pop();
+            if (start === undefined) continue;
+            if (isUnboundedQuantifierAt(pattern, i + 1)) {
+                groups.push({ start, end: i });
+            }
+        }
+    }
+
+    for (const g of groups) {
+        const inner = pattern.slice(g.start + 1, g.end);
+        for (let k = 0; k < inner.length; k++) {
+            if (inner[k] === "\\") {
+                k++;
+                continue;
+            }
+            if (isUnboundedQuantifierAt(inner, k)) return true;
+        }
+    }
+
+    return false;
+};
+
 /** Validates shape before persisting - rejects unknown types and pattern strings that won't compile. */
 export const validateTransformRule = (rule: TransformRule): string | null => {
     if (!VALID_TYPES.includes(rule.type)) {
@@ -46,10 +100,16 @@ export const validateTransformRule = (rule: TransformRule): string | null => {
     }
     if (rule.type === "regex_replace") {
         if (!rule.pattern) return "The \"regex_replace\" transform requires a pattern";
+        if (rule.pattern.length > 200) {
+            return "Regular expression pattern is too long (max 200 characters)";
+        }
         try {
             new RegExp(rule.pattern);
         } catch {
             return `Invalid regular expression: ${rule.pattern}`;
+        }
+        if (hasNestedUnboundedQuantifier(rule.pattern)) {
+            return "This pattern contains a nested repetition (e.g. \"(a+)+\") that can cause catastrophic backtracking - simplify it";
         }
     }
     return null;

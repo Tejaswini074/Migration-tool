@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, Download, Loader2, Rocket } from "lucide-react";
+import { AlertCircle, AlertTriangle, Ban, CheckCircle2, ChevronDown, Download, Loader2, Rocket } from "lucide-react";
 import { useMigrationRun } from "../hooks/useMigrationRun";
 import { getFailedRows } from "../services/dataBridgeApi";
 import { extractErrorMessage } from "../services/client";
@@ -23,7 +23,8 @@ const statusLabel: Record<string, string> = {
     completed: "Completed",
     completed_with_errors: "Completed with errors",
     failed: "Failed",
-    skipped: "Skipped"
+    skipped: "Skipped",
+    cancelled: "Cancelled"
 };
 
 const statusTone: Record<TableRunStatus, "slate" | "blue" | "green" | "red" | "amber"> = {
@@ -32,11 +33,12 @@ const statusTone: Record<TableRunStatus, "slate" | "blue" | "green" | "red" | "a
     completed: "green",
     completed_with_errors: "amber",
     failed: "red",
-    skipped: "slate"
+    skipped: "slate",
+    cancelled: "slate"
 };
 
 export default function MigrationProgress({ projectId, source, destination }: Props) {
-    const { run, error, starting, handleStart, downloading, downloadReport } = useMigrationRun(
+    const { run, error, starting, handleStart, cancelling, handleCancel, downloading, downloadReport } = useMigrationRun(
         projectId,
         source,
         destination
@@ -91,12 +93,24 @@ export default function MigrationProgress({ projectId, source, destination }: Pr
                                 tone={
                                     run.status === "completed" ? "green"
                                         : run.status === "failed" ? "red"
-                                            : run.status === "completed_with_errors" ? "amber" : "blue"
+                                            : run.status === "completed_with_errors" ? "amber"
+                                                : run.status === "cancelled" ? "slate" : "blue"
                                 }
                             >
                                 {run.status === "running" && <Loader2 className="h-3 w-3 animate-spin" />}
                                 {statusLabel[run.status] ?? run.status}
                             </Badge>
+                            {run.status === "running" && (
+                                <Button
+                                    variant="danger"
+                                    size="sm"
+                                    loading={cancelling}
+                                    onClick={handleCancel}
+                                >
+                                    <Ban className="h-3.5 w-3.5" />
+                                    Cancel
+                                </Button>
+                            )}
                             {run.status !== "running" && (
                                 <>
                                     <Button
@@ -139,6 +153,7 @@ export default function MigrationProgress({ projectId, source, destination }: Pr
                                             {table.status === "completed" && <CheckCircle2 className="h-3 w-3" />}
                                             {table.status === "completed_with_errors" && <AlertTriangle className="h-3 w-3" />}
                                             {table.status === "failed" && <AlertCircle className="h-3 w-3" />}
+                                            {table.status === "cancelled" && <Ban className="h-3 w-3" />}
                                             {table.status === "running" && (
                                                 <Loader2 className="h-3 w-3 animate-spin" />
                                             )}
@@ -153,7 +168,9 @@ export default function MigrationProgress({ projectId, source, destination }: Pr
                                                     ? "bg-red-500"
                                                     : table.status === "completed_with_errors"
                                                         ? "bg-amber-500"
-                                                        : "bg-linear-to-r from-indigo-600 to-violet-500 dark:from-indigo-400 dark:to-violet-400"
+                                                        : table.status === "cancelled"
+                                                            ? "bg-slate-400 dark:bg-slate-500"
+                                                            : "bg-linear-to-r from-indigo-600 to-violet-500 dark:from-indigo-400 dark:to-violet-400"
                                             )}
                                             style={{ width: `${pct}%` }}
                                         />

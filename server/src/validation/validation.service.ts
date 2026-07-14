@@ -1,5 +1,7 @@
 import { IConnector } from "../connectors/types";
 import { resolveTableOrder } from "../migration/dependencyOrder";
+import { parseTransformRule } from "../migration/transform";
+import { areTypesCompatible } from "./typeCompatibility";
 
 export interface ValidationIssue {
     severity: "error" | "warning";
@@ -50,6 +52,7 @@ class ValidationService {
             }
 
             const destColumns = await destinationConnection.getColumns(table.destination_table);
+            const sourceColumns = await sourceConnection.getColumns(table.source_table);
             const mappedDestCols = new Set(table.columns.map((c: any) => c.destination_column));
 
             for (const col of destColumns) {
@@ -84,6 +87,17 @@ class ValidationService {
                             message: `Source column "${col.source_column}" has ${dupeCount} duplicate value(s), but destination column "${col.destination_column}" must be unique.`
                         });
                     }
+                }
+
+                const sourceColInfo = sourceColumns.find((s: any) => s.Field === col.source_column);
+                const bridgingRule = parseTransformRule(col.transform_rule)?.type;
+                const hasBridgingTransform = bridgingRule === "cast_number" || bridgingRule === "cast_string" || bridgingRule === "date_format";
+
+                if (sourceColInfo && !hasBridgingTransform && !areTypesCompatible(sourceColInfo.Type, destColInfo.Type)) {
+                    issues.push({
+                        severity: "warning",
+                        message: `Source column "${col.source_column}" (${sourceColInfo.Type}) may not be compatible with destination column "${col.destination_column}" (${destColInfo.Type}). Consider adding a cast/format transform.`
+                    });
                 }
             }
 

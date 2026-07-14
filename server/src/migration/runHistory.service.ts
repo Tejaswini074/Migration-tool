@@ -205,20 +205,43 @@ class RunHistoryService {
         );
     }
 
-    async listRuns(requester: { userId: number; role: string }) {
-
+    async listRuns(
+        requester: { userId: number; role: string },
+        options?: { search?: string; page?: number; pageSize?: number }
+    ) {
         await this.ensureTables();
         const db = getAppDatabase();
         const isAdmin = requester.role === "admin";
 
-        const [rows]: any = await db.query(
-            isAdmin
-                ? `SELECT * FROM migration_runs ORDER BY started_at DESC`
-                : `SELECT * FROM migration_runs WHERE started_by_user_id = ? ORDER BY started_at DESC`,
-            isAdmin ? [] : [requester.userId]
-        );
+        const conditions: string[] = [];
+        const params: any[] = [];
 
-        return rows;
+        if (!isAdmin) {
+            conditions.push("started_by_user_id = ?");
+            params.push(requester.userId);
+        }
+        if (options?.search) {
+            conditions.push("project_name LIKE ?");
+            params.push(`%${options.search}%`);
+        }
+
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+        const [countRows]: any = await db.query(
+            `SELECT COUNT(*) total FROM migration_runs ${whereClause}`,
+            params
+        );
+        const total = countRows[0].total;
+
+        let sql = `SELECT * FROM migration_runs ${whereClause} ORDER BY started_at DESC`;
+        const queryParams = [...params];
+        if (options?.page && options?.pageSize) {
+            sql += ` LIMIT ? OFFSET ?`;
+            queryParams.push(options.pageSize, (options.page - 1) * options.pageSize);
+        }
+
+        const [rows]: any = await db.query(sql, queryParams);
+        return { items: rows, total };
     }
 
     async getRun(runId: string) {
@@ -249,7 +272,7 @@ class RunHistoryService {
         const joinedFilter = isAdmin ? "1=1" : "mr.started_by_user_id = ?";
         const params = isAdmin ? [] : [requester.userId];
 
-        const projects = await mappingService.getProjects(requester);
+        const { total: totalProjects } = await mappingService.getProjects(requester);
 
         const [[runStats]]: any = await db.query(
             `SELECT
@@ -287,7 +310,7 @@ class RunHistoryService {
         const successfulRuns = Number(runStats.successfulRuns) || 0;
 
         return {
-            totalProjects: projects.length,
+            totalProjects,
             totalRuns,
             successRate: totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : 0,
             totalRowsMigrated: Number(rowStats.totalRowsMigrated) || 0,

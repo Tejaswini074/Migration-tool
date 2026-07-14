@@ -9,8 +9,13 @@ import {
 import { extractErrorMessage } from "../services/client";
 import type { MigrationSchedule, ScheduleConnectionConfig } from "../types";
 
+const PAGE_SIZE = 10;
+
 export function useSchedules() {
     const [schedules, setSchedules] = useState<MigrationSchedule[]>([]);
+    const [total, setTotal] = useState(0);
+    const [search, setSearchState] = useState("");
+    const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [busyId, setBusyId] = useState<number | null>(null);
@@ -19,7 +24,13 @@ export function useSchedules() {
         setLoading(true);
         setError(null);
         try {
-            setSchedules(await getSchedules());
+            const { items, total: itemTotal } = await getSchedules({
+                search: search || undefined,
+                page,
+                pageSize: PAGE_SIZE
+            });
+            setSchedules(items);
+            setTotal(itemTotal);
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
@@ -29,7 +40,13 @@ export function useSchedules() {
 
     useEffect(() => {
         refresh();
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page, search]);
+
+    const setSearch = (value: string) => {
+        setSearchState(value);
+        setPage(1);
+    };
 
     const handleCreate = async (payload: {
         projectId: number;
@@ -88,5 +105,9 @@ export function useSchedules() {
         }
     };
 
-    return { schedules, loading, error, busyId, refresh, handleCreate, handleToggle, handleDelete, handleRunNow };
+    return {
+        schedules, total, loading, error,
+        search, setSearch, page, setPage, pageSize: PAGE_SIZE,
+        busyId, refresh, handleCreate, handleToggle, handleDelete, handleRunNow
+    };
 }

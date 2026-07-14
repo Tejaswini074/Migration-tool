@@ -10,7 +10,8 @@ import type {
     ProjectValidationResult,
     FailedRow,
     TableRecommendation,
-    TableSchema
+    TableSchema,
+    PagedParams
 } from "../types";
 
 export interface ConnectPayload {
@@ -30,6 +31,20 @@ export const connectDatabase = async (payload: ConnectPayload) => {
         type: "mysql" | "postgres";
         message: string;
     }>("/database/connect", payload);
+    return data;
+};
+
+export const connectCsv = async (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const { data } = await apiClient.post<{
+        success: boolean;
+        connectionId: string;
+        database: string;
+        type: "csv";
+        tableName: string;
+        message: string;
+    }>("/database/connect-csv", form);
     return data;
 };
 
@@ -65,11 +80,12 @@ export const createProject = async (payload: {
     return data.projectId;
 };
 
-export const getProjects = async () => {
-    const { data } = await apiClient.get<{ success: boolean; projects: MigrationProjectSummary[] }>(
-        "/mapping/projects"
+export const getProjects = async (params: PagedParams = {}) => {
+    const { data } = await apiClient.get<{ success: boolean; projects: MigrationProjectSummary[]; total: number }>(
+        "/mapping/projects",
+        { params }
     );
-    return data.projects;
+    return { items: data.projects, total: data.total };
 };
 
 export const deleteProject = async (projectId: number) => {
@@ -178,16 +194,21 @@ export const getMigrationStatus = async (runId: string) => {
     return data.run;
 };
 
+export const cancelMigration = async (runId: string) => {
+    await apiClient.post(`/migration/cancel/${runId}`);
+};
+
 export const getMigrationStats = async () => {
     const { data } = await apiClient.get<{ success: boolean; stats: MigrationStats }>("/migration/stats");
     return data.stats;
 };
 
-export const getMigrationHistory = async () => {
-    const { data } = await apiClient.get<{ success: boolean; runs: MigrationRunSummary[] }>(
-        "/migration/history"
+export const getMigrationHistory = async (params: PagedParams = {}) => {
+    const { data } = await apiClient.get<{ success: boolean; runs: MigrationRunSummary[]; total: number }>(
+        "/migration/history",
+        { params }
     );
-    return data.runs;
+    return { items: data.runs, total: data.total };
 };
 
 export const downloadMigrationReport = async (runId: string, format: "csv" | "pdf") => {
@@ -222,9 +243,12 @@ export const createSchedule = async (payload: {
     return data.scheduleId;
 };
 
-export const getSchedules = async () => {
-    const { data } = await apiClient.get<{ success: boolean; schedules: MigrationSchedule[] }>("/schedules");
-    return data.schedules;
+export const getSchedules = async (params: PagedParams = {}) => {
+    const { data } = await apiClient.get<{ success: boolean; schedules: MigrationSchedule[]; total: number }>(
+        "/schedules",
+        { params }
+    );
+    return { items: data.schedules, total: data.total };
 };
 
 export const toggleSchedule = async (scheduleId: number, isActive: boolean) => {

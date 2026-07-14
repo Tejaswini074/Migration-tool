@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
-import { createUser, deleteUser, listUsers, updateUserRole } from "../services/authApi";
+import { adminResetPassword, createUser, deleteUser, listUsers, updateUserRole } from "../services/authApi";
 import { extractErrorMessage } from "../services/client";
 import type { ManagedUser, UserRole } from "../types";
 
+const PAGE_SIZE = 10;
+
 export function useUsers() {
     const [users, setUsers] = useState<ManagedUser[]>([]);
+    const [total, setTotal] = useState(0);
+    const [search, setSearchState] = useState("");
+    const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -17,7 +22,13 @@ export function useUsers() {
     const refresh = async () => {
         setLoading(true);
         try {
-            setUsers(await listUsers());
+            const { items, total: itemTotal } = await listUsers({
+                search: search || undefined,
+                page,
+                pageSize: PAGE_SIZE
+            });
+            setUsers(items);
+            setTotal(itemTotal);
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
@@ -28,7 +39,12 @@ export function useUsers() {
     useEffect(() => {
         refresh();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [page, search]);
+
+    const setSearch = (value: string) => {
+        setSearchState(value);
+        setPage(1);
+    };
 
     const handleCreate = async () => {
         setCreating(true);
@@ -67,8 +83,25 @@ export function useUsers() {
         }
     };
 
+    const handleResetPassword = async (userId: number, newPassword: string) => {
+        setError(null);
+        try {
+            await adminResetPassword(userId, newPassword);
+            return true;
+        } catch (err) {
+            setError(extractErrorMessage(err));
+            return false;
+        }
+    };
+
     return {
         users,
+        total,
+        search,
+        setSearch,
+        page,
+        setPage,
+        pageSize: PAGE_SIZE,
         loading,
         error,
         name,
@@ -82,6 +115,7 @@ export function useUsers() {
         creating,
         handleCreate,
         handleRoleChange,
-        handleDelete
+        handleDelete,
+        handleResetPassword
     };
 }

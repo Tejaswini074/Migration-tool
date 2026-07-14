@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { AuthUser, ManagedUser, UserRole } from "../types";
+import type { AuthUser, ManagedUser, PagedParams, UserRole } from "../types";
 
 export const getBootstrapStatus = async () => {
     const { data } = await apiClient.get<{ success: boolean; needsBootstrap: boolean }>(
@@ -37,9 +37,20 @@ export const getMe = async () => {
     return data.user;
 };
 
-export const listUsers = async () => {
-    const { data } = await apiClient.get<{ success: boolean; users: ManagedUser[] }>("/auth/users");
-    return data.users;
+export const changeOwnPassword = async (currentPassword: string, newPassword: string) => {
+    await apiClient.put("/auth/me/password", { currentPassword, newPassword });
+};
+
+export const adminResetPassword = async (userId: number, newPassword: string) => {
+    await apiClient.put(`/auth/users/${userId}/password`, { newPassword });
+};
+
+export const listUsers = async (params: PagedParams = {}) => {
+    const { data } = await apiClient.get<{ success: boolean; users: ManagedUser[]; total: number }>(
+        "/auth/users",
+        { params }
+    );
+    return { items: data.users, total: data.total };
 };
 
 export const createUser = async (payload: {

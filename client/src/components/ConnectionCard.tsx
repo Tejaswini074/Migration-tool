@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { CheckCircle2, ChevronRight, KeyRound, Server } from "lucide-react";
+import { useState, type ChangeEvent } from "react";
+import { CheckCircle2, ChevronRight, FileSpreadsheet, KeyRound, Server, Upload } from "lucide-react";
 import { useConnection } from "../hooks/useConnection";
 import { cn } from "../lib/cn";
-import type { ConnectionState } from "../types";
+import type { ConnectionState, ConnectorType } from "../types";
 import Card from "./ui/Card";
 import Input from "./ui/Input";
 import Button from "./ui/Button";
@@ -11,11 +11,24 @@ interface Props {
     label: string;
     connection: ConnectionState | null;
     onConnected: (state: ConnectionState) => void;
+    /** CSV only makes sense as a migration source, not a destination - only pass this on the source card. */
+    allowCsv?: boolean;
 }
 
-export default function ConnectionCard({ label, connection, onConnected }: Props) {
-    const { form, handleChange, setType, loading, error, connect } = useConnection(onConnected);
+export default function ConnectionCard({ label, connection, onConnected, allowCsv }: Props) {
+    const { form, handleChange, setType, loading, error, connect, connectFile } = useConnection(onConnected);
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
+    const [activeTab, setActiveTab] = useState<ConnectorType>("mysql");
+    const [csvFile, setCsvFile] = useState<File | null>(null);
+
+    const selectTab = (t: ConnectorType) => {
+        setActiveTab(t);
+        if (t !== "csv") setType(t);
+    };
+
+    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        setCsvFile(e.target.files?.[0] ?? null);
+    };
 
     const toggleTable = (tableName: string) => {
         setExpanded((prev) => {
@@ -41,8 +54,8 @@ export default function ConnectionCard({ label, connection, onConnected }: Props
                             </span>
                         </div>
                         <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
-                            <span className="font-medium">{connection.database}</span> @ {connection.host}:
-                            {connection.port}
+                            <span className="font-medium">{connection.database}</span>
+                            {connection.type !== "csv" && <> @ {connection.host}:{connection.port}</>}
                         </p>
                         <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{connection.schema.length} table(s) found</p>
                     </div>
@@ -111,48 +124,80 @@ export default function ConnectionCard({ label, connection, onConnected }: Props
             </div>
 
             <div className="mb-3 inline-flex rounded-lg bg-slate-100 p-1 text-sm dark:bg-white/5">
-                {(["mysql", "postgres"] as const).map((t) => (
+                {(allowCsv ? (["mysql", "postgres", "csv"] as const) : (["mysql", "postgres"] as const)).map((t) => (
                     <button
                         key={t}
                         type="button"
-                        onClick={() => setType(t)}
+                        onClick={() => selectTab(t)}
                         className={cn(
                             "rounded-md px-3 py-1 font-medium transition-colors",
-                            form.type === t
+                            activeTab === t
                                 ? "bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white"
                                 : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
                         )}
                     >
-                        {t === "mysql" ? "MySQL" : "PostgreSQL"}
+                        {t === "mysql" ? "MySQL" : t === "postgres" ? "PostgreSQL" : "CSV"}
                     </button>
                 ))}
             </div>
 
-            <div className="flex flex-col gap-3">
-                <div className="grid grid-cols-2 gap-3">
-                    <Input label="Host" value={form.host} onChange={handleChange("host")} />
-                    <Input label="Port" value={form.port} onChange={handleChange("port")} />
+            {activeTab === "csv" ? (
+                <div className="flex flex-col gap-3">
+                    <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center hover:border-indigo-400 dark:border-white/15 dark:hover:border-indigo-400/60">
+                        <input type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
+                        {csvFile ? (
+                            <>
+                                <FileSpreadsheet className="h-6 w-6 text-indigo-500 dark:text-indigo-400" />
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{csvFile.name}</span>
+                            </>
+                        ) : (
+                            <>
+                                <Upload className="h-6 w-6 text-slate-400 dark:text-slate-500" />
+                                <span className="text-sm text-slate-500 dark:text-slate-400">Click to choose a .csv file</span>
+                            </>
+                        )}
+                    </label>
+
+                    {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+                    <Button
+                        loading={loading}
+                        disabled={!csvFile}
+                        onClick={() => csvFile && connectFile(csvFile)}
+                        className="w-full"
+                    >
+                        Upload &amp; connect
+                    </Button>
                 </div>
-                <Input label="User" value={form.user} onChange={handleChange("user")} />
-                <Input
-                    label="Password"
-                    type="password"
-                    value={form.password}
-                    onChange={handleChange("password")}
-                />
-                <Input label="Database" value={form.database} onChange={handleChange("database")} />
-            </div>
+            ) : (
+                <>
+                    <div className="flex flex-col gap-3">
+                        <div className="grid grid-cols-2 gap-3">
+                            <Input label="Host" value={form.host} onChange={handleChange("host")} />
+                            <Input label="Port" value={form.port} onChange={handleChange("port")} />
+                        </div>
+                        <Input label="User" value={form.user} onChange={handleChange("user")} />
+                        <Input
+                            label="Password"
+                            type="password"
+                            value={form.password}
+                            onChange={handleChange("password")}
+                        />
+                        <Input label="Database" value={form.database} onChange={handleChange("database")} />
+                    </div>
 
-            {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+                    {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-            <Button
-                loading={loading}
-                disabled={!form.host || !form.database || !form.user}
-                onClick={connect}
-                className="mt-4 w-full"
-            >
-                Connect
-            </Button>
+                    <Button
+                        loading={loading}
+                        disabled={!form.host || !form.database || !form.user}
+                        onClick={connect}
+                        className="mt-4 w-full"
+                    >
+                        Connect
+                    </Button>
+                </>
+            )}
         </Card>
     );
 }

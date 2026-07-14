@@ -3,8 +3,16 @@ import { deleteProject, getProjectDetail, getProjects } from "../services/dataBr
 import { extractErrorMessage } from "../services/client";
 import type { MigrationProjectDetail, MigrationProjectSummary } from "../types";
 
-export function useProjects() {
+/**
+ * pageSize is optional so this hook can serve both the paginated Projects list and the
+ * unpaginated Schedules project picker with the same code - omitting it fetches everything.
+ */
+export function useProjects(options?: { pageSize?: number }) {
+    const pageSize = options?.pageSize;
     const [projects, setProjects] = useState<MigrationProjectSummary[]>([]);
+    const [total, setTotal] = useState(0);
+    const [search, setSearch] = useState("");
+    const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -13,7 +21,11 @@ export function useProjects() {
         setLoading(true);
         setError(null);
         try {
-            setProjects(await getProjects());
+            const { items, total: itemTotal } = await getProjects(
+                pageSize ? { search: search || undefined, page, pageSize } : {}
+            );
+            setProjects(items);
+            setTotal(itemTotal);
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
@@ -23,7 +35,8 @@ export function useProjects() {
 
     useEffect(() => {
         refresh();
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page, search]);
 
     const handleDelete = async (projectId: number) => {
         setDeletingId(projectId);
@@ -38,7 +51,12 @@ export function useProjects() {
         }
     };
 
-    return { projects, loading, error, refresh, deletingId, handleDelete };
+    return {
+        projects, total, loading, error, refresh,
+        search, setSearch: (value: string) => { setSearch(value); setPage(1); },
+        page, setPage,
+        deletingId, handleDelete
+    };
 }
 
 export function useProjectDetail(projectId: number) {

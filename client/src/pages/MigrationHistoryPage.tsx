@@ -1,19 +1,42 @@
-import { Download, History } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Download, History, Search } from "lucide-react";
 import { useMigrationHistory } from "../hooks/useMigrationHistory";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
+import Input from "../components/ui/Input";
+import Pagination from "../components/ui/Pagination";
 import { initials } from "../lib/initials";
 
 const statusTone = (status: string) =>
-    status === "completed" ? "green" : status === "failed" ? "red" : "blue";
+    status === "completed" ? "green"
+        : status === "failed" ? "red"
+            : status === "completed_with_errors" ? "amber"
+                : status === "cancelled" ? "slate" : "blue";
 
 export default function MigrationHistoryPage() {
-    const { runs, loading, error, downloadingKey, downloadReport } = useMigrationHistory();
+    const { runs, total, loading, error, search, setSearch, page, setPage, pageSize, downloadingKey, downloadReport } = useMigrationHistory();
+    const [searchInput, setSearchInput] = useState("");
+    const debouncedSearch = useDebouncedValue(searchInput);
+
+    useEffect(() => {
+        setSearch(debouncedSearch);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [debouncedSearch]);
 
     return (
         <div className="flex flex-col gap-5">
             {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+            <div className="max-w-xs">
+                <Input
+                    placeholder="Search by project..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    rightSlot={<Search className="h-4 w-4 text-slate-400 dark:text-slate-500" />}
+                />
+            </div>
 
             <Card className="p-0">
                 {loading ? (
@@ -23,9 +46,11 @@ export default function MigrationHistoryPage() {
                         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-white/5">
                             <History className="h-5 w-5 text-slate-400 dark:text-slate-500" />
                         </div>
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">No migration runs yet</p>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                            {search ? "No runs match your search" : "No migration runs yet"}
+                        </p>
                         <p className="-mt-2 text-sm text-slate-500 dark:text-slate-400">
-                            Runs you start from the Migration tab will show up here.
+                            {search ? "Try a different search term." : "Runs you start from the Migration tab will show up here."}
                         </p>
                     </div>
                 ) : (
@@ -94,6 +119,7 @@ export default function MigrationHistoryPage() {
                         </tbody>
                     </table>
                 )}
+                <Pagination page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
             </Card>
         </div>
     );

@@ -22,7 +22,7 @@ export default function MigrationPage() {
             {step === "connect" && (
                 <>
                     <div className="grid gap-5 sm:grid-cols-2">
-                        <ConnectionCard label="Source database" connection={source} onConnected={setSource} />
+                        <ConnectionCard label="Source database" connection={source} onConnected={setSource} allowCsv />
                         <ConnectionCard
                             label="Destination database"
                             connection={destination}

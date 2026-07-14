@@ -50,13 +50,34 @@ class AuthService {
         return rows[0] ?? null;
     }
 
-    async listUsers(): Promise<Omit<AppUser, "password_hash">[]> {
+    async listUsers(
+        options?: { search?: string; page?: number; pageSize?: number }
+    ): Promise<{ items: Omit<AppUser, "password_hash">[]; total: number }> {
         await this.ensureTables();
         const db = getAppDatabase();
-        const [rows]: any = await db.query(
-            "SELECT id, name, email, role, created_at FROM users ORDER BY created_at ASC"
-        );
-        return rows;
+
+        const conditions: string[] = [];
+        const params: any[] = [];
+
+        if (options?.search) {
+            conditions.push("(name LIKE ? OR email LIKE ?)");
+            params.push(`%${options.search}%`, `%${options.search}%`);
+        }
+
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+        const [countRows]: any = await db.query(`SELECT COUNT(*) total FROM users ${whereClause}`, params);
+        const total = countRows[0].total;
+
+        let sql = `SELECT id, name, email, role, created_at FROM users ${whereClause} ORDER BY created_at ASC`;
+        const queryParams = [...params];
+        if (options?.page && options?.pageSize) {
+            sql += ` LIMIT ? OFFSET ?`;
+            queryParams.push(options.pageSize, (options.page - 1) * options.pageSize);
+        }
+
+        const [rows]: any = await db.query(sql, queryParams);
+        return { items: rows, total };
     }
 
     async createUser(data: { name: string; email: string; password: string; role: UserRole }): Promise<number> {
@@ -141,6 +162,40 @@ class AuthService {
         await this.ensureTables();
         const db = getAppDatabase();
         await db.execute("UPDATE users SET role = ? WHERE id = ?", [role, userId]);
+        return { ok: true };
+    }
+
+    async changePassword(userId: number, currentPassword: string, newPassword: string): Promise<SimpleResult> {
+        if (newPassword.length < 8) {
+            return { ok: false, status: 400, message: "New password must be at least 8 characters" };
+        }
+
+        const user = await this.findById(userId);
+        if (!user) {
+            return { ok: false, status: 404, message: "User not found" };
+        }
+
+        const valid = await this.verifyPassword(user, currentPassword);
+        if (!valid) {
+            return { ok: false, status: 400, message: "Current password is incorrect" };
+        }
+
+        const db = getAppDatabase();
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+        await db.execute("UPDATE users SET password_hash = ? WHERE id = ?", [passwordHash, userId]);
+        return { ok: true };
+    }
+
+    /** Admin sets a new password directly - same trust level as createUser already setting one. */
+    async adminResetPassword(userId: number, newPassword: string): Promise<SimpleResult> {
+        if (newPassword.length < 8) {
+            return { ok: false, status: 400, message: "New password must be at least 8 characters" };
+        }
+
+        await this.ensureTables();
+        const db = getAppDatabase();
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+        await db.execute("UPDATE users SET password_hash = ? WHERE id = ?", [passwordHash, userId]);
         return { ok: true };
     }
 

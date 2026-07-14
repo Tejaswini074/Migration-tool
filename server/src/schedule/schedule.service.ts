@@ -193,22 +193,42 @@ class ScheduleService {
         return scheduleId;
     }
 
-    async listSchedules(requester: Requester) {
+    async listSchedules(requester: Requester, options?: { search?: string; page?: number; pageSize?: number }) {
         await this.ensureTables();
         const db = getAppDatabase();
         const isAdmin = requester.role === "admin";
 
         // Never select the encrypted credential columns back out to the client.
-        const columns = `id, project_id, cron_expression, mode, batch_size, is_active,
-            created_by_user_id, created_by_name, last_run_at, last_run_status, next_run_at, created_at`;
+        const columns = `ms.id, ms.project_id, ms.cron_expression, ms.mode, ms.batch_size, ms.is_active,
+            ms.created_by_user_id, ms.created_by_name, ms.last_run_at, ms.last_run_status, ms.next_run_at, ms.created_at`;
 
-        const [rows]: any = await db.query(
-            isAdmin
-                ? `SELECT ${columns} FROM migration_schedules ORDER BY created_at DESC`
-                : `SELECT ${columns} FROM migration_schedules WHERE created_by_user_id = ? ORDER BY created_at DESC`,
-            isAdmin ? [] : [requester.userId]
-        );
-        return rows;
+        const conditions: string[] = [];
+        const params: any[] = [];
+
+        if (!isAdmin) {
+            conditions.push("ms.created_by_user_id = ?");
+            params.push(requester.userId);
+        }
+        if (options?.search) {
+            conditions.push("mp.project_name LIKE ?");
+            params.push(`%${options.search}%`);
+        }
+
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+        const fromClause = `FROM migration_schedules ms JOIN migration_projects mp ON mp.id = ms.project_id ${whereClause}`;
+
+        const [countRows]: any = await db.query(`SELECT COUNT(*) total ${fromClause}`, params);
+        const total = countRows[0].total;
+
+        let sql = `SELECT ${columns} ${fromClause} ORDER BY ms.created_at DESC`;
+        const queryParams = [...params];
+        if (options?.page && options?.pageSize) {
+            sql += ` LIMIT ? OFFSET ?`;
+            queryParams.push(options.pageSize, (options.page - 1) * options.pageSize);
+        }
+
+        const [rows]: any = await db.query(sql, queryParams);
+        return { items: rows, total };
     }
 
     async toggleSchedule(id: number, isActive: boolean, requester: Requester) {

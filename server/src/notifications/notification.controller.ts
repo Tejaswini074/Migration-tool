@@ -17,7 +17,7 @@ export const updateNotificationSettings = async (req: AuthenticatedRequest, res:
         const { webhookUrl, notifyOnSuccess, notifyOnFailure } = req.body;
 
         if (webhookUrl) {
-            const validation = validateWebhookUrl(webhookUrl);
+            const validation = await validateWebhookUrl(webhookUrl);
             if (!validation.ok) {
                 res.status(400).json({ success: false, message: validation.message });
                 return;

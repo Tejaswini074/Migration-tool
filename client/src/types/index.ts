@@ -1,5 +1,16 @@
 export type UserRole = "admin" | "user";
 
+export interface PagedParams {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+}
+
+export interface PagedResult<T> {
+    items: T[];
+    total: number;
+}
+
 export interface AuthUser {
     id: number;
     name: string;
@@ -37,7 +48,7 @@ export interface TableSchema {
     foreignKeys: ForeignKeyInfo[];
 }
 
-export type ConnectorType = "mysql" | "postgres";
+export type ConnectorType = "mysql" | "postgres" | "csv";
 
 export interface ConnectionState {
     connectionId: string;
@@ -101,7 +112,7 @@ export interface TableRunState {
 export interface MigrationRun {
     runId: string;
     projectId: number;
-    status: "running" | "completed" | "completed_with_errors" | "failed";
+    status: "running" | "completed" | "completed_with_errors" | "failed" | "cancelled";
     startedAt: string;
     finishedAt: string | null;
     tables: TableRunState[];
@@ -186,7 +197,7 @@ export interface MigrationStats {
         project_name: string;
         source_database: string;
         destination_database: string;
-        status: "running" | "completed" | "completed_with_errors" | "failed";
+        status: "running" | "completed" | "completed_with_errors" | "failed" | "cancelled";
         started_at: string;
         finished_at: string | null;
     }[];

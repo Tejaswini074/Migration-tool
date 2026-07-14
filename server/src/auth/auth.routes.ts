@@ -6,6 +6,8 @@ import {
     signup,
     login,
     me,
+    changeOwnPassword,
+    adminResetPassword,
     listUsers,
     createUserByAdmin,
     updateUserRole,
@@ -30,10 +32,12 @@ router.post("/signup", authAttemptLimiter, signup);
 router.post("/login", authAttemptLimiter, login);
 
 router.get("/me", authenticate, me);
+router.put("/me/password", authenticate, authAttemptLimiter, changeOwnPassword);
 
 router.get("/users", authenticate, requireRole("admin"), listUsers);
 router.post("/users", authenticate, requireRole("admin"), createUserByAdmin);
 router.patch("/users/:userId/role", authenticate, requireRole("admin"), updateUserRole);
+router.put("/users/:userId/password", authenticate, requireRole("admin"), authAttemptLimiter, adminResetPassword);
 router.delete("/users/:userId", authenticate, requireRole("admin"), deleteUser);
 
 export default router;

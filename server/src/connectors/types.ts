@@ -1,4 +1,4 @@
-export type ConnectorType = "mysql" | "postgres";
+export type ConnectorType = "mysql" | "postgres" | "csv";
 
 export interface ColumnInfo {
     Field: string;

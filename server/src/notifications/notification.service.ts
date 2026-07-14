@@ -1,4 +1,5 @@
 import { getAppDatabase } from "../config/appDatabase";
+import { validateWebhookUrl } from "../lib/validateWebhookUrl";
 
 export interface NotificationSettings {
     webhookUrl: string | null;
@@ -79,6 +80,11 @@ class NotificationService {
             const succeeded = run.status !== "failed";
             if (succeeded && !settings.notifyOnSuccess) return;
             if (!succeeded && !settings.notifyOnFailure) return;
+
+            // Re-validate at fire time, not just at save time: DNS can have re-pointed the
+            // hostname at a private address since the URL was saved (rebinding).
+            const revalidation = await validateWebhookUrl(settings.webhookUrl);
+            if (!revalidation.ok) return;
 
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);

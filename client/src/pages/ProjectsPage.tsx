@@ -1,13 +1,18 @@
-import { useState, type MouseEvent } from "react";
-import { ArrowLeft, ArrowRight, Database, FolderKanban, Play, Trash2 } from "lucide-react";
+import { useEffect, useState, type MouseEvent } from "react";
+import { ArrowLeft, ArrowRight, Database, FolderKanban, Play, Search, Trash2 } from "lucide-react";
 import { useProjectDetail, useProjects } from "../hooks/useProjects";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import ConnectionCard from "../components/ConnectionCard";
 import ValidationReport from "../components/ValidationReport";
 import MigrationProgress from "../components/MigrationProgress";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
+import Input from "../components/ui/Input";
+import Pagination from "../components/ui/Pagination";
 import { initials } from "../lib/initials";
 import type { ConnectionState } from "../types";
+
+const PAGE_SIZE = 10;
 
 export default function ProjectsPage() {
     const [openProjectId, setOpenProjectId] = useState<number | null>(null);
@@ -20,7 +25,17 @@ export default function ProjectsPage() {
 }
 
 function ProjectList({ onOpen }: { onOpen: (id: number) => void }) {
-    const { projects, loading, error, deletingId, handleDelete } = useProjects();
+    const {
+        projects, total, loading, error, deletingId, handleDelete,
+        search, setSearch, page, setPage
+    } = useProjects({ pageSize: PAGE_SIZE });
+    const [searchInput, setSearchInput] = useState("");
+    const debouncedSearch = useDebouncedValue(searchInput);
+
+    useEffect(() => {
+        setSearch(debouncedSearch);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [debouncedSearch]);
 
     const confirmDelete = (e: MouseEvent, projectId: number, projectName: string) => {
         e.stopPropagation();
@@ -33,6 +48,15 @@ function ProjectList({ onOpen }: { onOpen: (id: number) => void }) {
         <div className="flex flex-col gap-5">
             {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
+            <div className="max-w-xs">
+                <Input
+                    placeholder="Search projects..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    rightSlot={<Search className="h-4 w-4 text-slate-400 dark:text-slate-500" />}
+                />
+            </div>
+
             <Card className="p-0">
                 {loading ? (
                     <p className="px-6 py-6 text-sm text-slate-500 dark:text-slate-400">Loading...</p>
@@ -42,9 +66,11 @@ function ProjectList({ onOpen }: { onOpen: (id: number) => void }) {
                             <FolderKanban className="h-5 w-5 text-slate-400 dark:text-slate-500" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">No migration projects yet</p>
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                {search ? "No projects match your search" : "No migration projects yet"}
+                            </p>
                             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                                Create one from the Migration tab and it will show up here.
+                                {search ? "Try a different search term." : "Create one from the Migration tab and it will show up here."}
                             </p>
                         </div>
                     </div>
@@ -111,6 +137,7 @@ function ProjectList({ onOpen }: { onOpen: (id: number) => void }) {
                         </tbody>
                     </table>
                 )}
+                <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
             </Card>
         </div>
     );
@@ -198,7 +225,7 @@ function ProjectDetailView({ projectId, onBack }: { projectId: number; onBack: (
                                 Reconnect both databases to run this migration again.
                             </div>
                             <div className="grid gap-5 sm:grid-cols-2">
-                                <ConnectionCard label="Source database" connection={source} onConnected={setSource} />
+                                <ConnectionCard label="Source database" connection={source} onConnected={setSource} allowCsv />
                                 <ConnectionCard
                                     label="Destination database"
                                     connection={destination}

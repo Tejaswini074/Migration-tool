@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { downloadMigrationReport, getMigrationStatus, runMigration } from "../services/dataBridgeApi";
+import { cancelMigration, downloadMigrationReport, getMigrationStatus, runMigration } from "../services/dataBridgeApi";
 import { extractErrorMessage } from "../services/client";
 import type { ConnectionState, MigrationRun } from "../types";
 
@@ -7,6 +7,7 @@ export function useMigrationRun(projectId: number, source: ConnectionState, dest
     const [run, setRun] = useState<MigrationRun | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [starting, setStarting] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
     const [downloading, setDownloading] = useState<"csv" | "pdf" | null>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -52,6 +53,19 @@ export function useMigrationRun(projectId: number, source: ConnectionState, dest
         }
     };
 
+    const handleCancel = async () => {
+        if (!run) return;
+        setCancelling(true);
+        setError(null);
+        try {
+            await cancelMigration(run.runId);
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setCancelling(false);
+        }
+    };
+
     const downloadReport = async (format: "csv" | "pdf") => {
         if (!run) return;
         setDownloading(format);
@@ -65,5 +79,5 @@ export function useMigrationRun(projectId: number, source: ConnectionState, dest
         }
     };
 
-    return { run, error, starting, handleStart, downloading, downloadReport };
+    return { run, error, starting, handleStart, cancelling, handleCancel, downloading, downloadReport };
 }

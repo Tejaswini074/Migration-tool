@@ -93,10 +93,60 @@ export const me = async (req: AuthenticatedRequest, res: Response): Promise<void
     }
 };
 
+export const changeOwnPassword = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            res.status(400).json({ success: false, message: "Current password and new password are required" });
+            return;
+        }
+
+        const result = await authService.changePassword(req.user!.userId, currentPassword, newPassword);
+        if (!result.ok) {
+            res.status(result.status).json({ success: false, message: result.message });
+            return;
+        }
+
+        res.json({ success: true });
+
+    } catch (err: any) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+export const adminResetPassword = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+        const userId = Number(req.params.userId);
+        const { newPassword } = req.body;
+
+        if (!newPassword) {
+            res.status(400).json({ success: false, message: "New password is required" });
+            return;
+        }
+
+        const result = await authService.adminResetPassword(userId, newPassword);
+        if (!result.ok) {
+            res.status(result.status).json({ success: false, message: result.message });
+            return;
+        }
+
+        res.json({ success: true });
+
+    } catch (err: any) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
 export const listUsers = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-        const users = await authService.listUsers();
-        res.json({ success: true, users });
+        const { search, page, pageSize } = req.query;
+        const { items, total } = await authService.listUsers({
+            search: search ? String(search) : undefined,
+            page: page ? Number(page) : undefined,
+            pageSize: pageSize ? Number(pageSize) : undefined
+        });
+        res.json({ success: true, users: items, total });
     } catch (err: any) {
         res.status(500).json({ success: false, message: err.message });
     }

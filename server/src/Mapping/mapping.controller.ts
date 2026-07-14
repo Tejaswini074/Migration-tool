@@ -31,13 +31,19 @@ export const createProject = async (req: AuthenticatedRequest, res: Response): P
 export const getProjects = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
-        const projects = await mappingService.getProjects({
-            userId: req.user!.userId,
-            role: req.user!.role
-        });
+        const { search, page, pageSize } = req.query;
+        const { items, total } = await mappingService.getProjects(
+            { userId: req.user!.userId, role: req.user!.role },
+            {
+                search: search ? String(search) : undefined,
+                page: page ? Number(page) : undefined,
+                pageSize: pageSize ? Number(pageSize) : undefined
+            }
+        );
         res.json({
             success: true,
-            projects
+            projects: items,
+            total
         });
 
     } catch (err: any) {

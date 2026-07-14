@@ -11,7 +11,10 @@ interface Props {
 }
 
 const statusTone = (status: string) =>
-    status === "completed" ? "green" : status === "failed" ? "red" : status === "completed_with_errors" ? "amber" : "blue";
+    status === "completed" ? "green"
+        : status === "failed" ? "red"
+            : status === "completed_with_errors" ? "amber"
+                : status === "cancelled" ? "slate" : "blue";
 
 const statCards = [
     { key: "totalProjects" as const, label: "Projects", icon: FolderKanban },
