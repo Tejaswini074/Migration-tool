@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from "react";
-import { Boxes, Database, Eye, EyeOff, Gauge, History, ShieldCheck } from "lucide-react";
+import { Boxes, CheckCircle2, Database, Eye, EyeOff, Gauge, History, ShieldCheck } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
+import { forgotPassword } from "../services/authApi";
 import { extractErrorMessage } from "../services/client";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 
-type Mode = "login" | "signup";
+type Mode = "login" | "signup" | "forgot";
 
 const features = [
     {
@@ -31,7 +32,7 @@ const features = [
 ];
 
 export default function LoginPage() {
-    const { needsBootstrap, login, registerFirstAdmin, signup } = useAuth();
+    const { needsBootstrap, openSignupEnabled, login, registerFirstAdmin, signup } = useAuth();
 
     const [mode, setMode] = useState<Mode>("login");
     const [name, setName] = useState("");
@@ -40,6 +41,7 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [forgotSent, setForgotSent] = useState(false);
 
     const isSignupForm = needsBootstrap || mode === "signup";
 
@@ -48,7 +50,10 @@ export default function LoginPage() {
         setLoading(true);
         setError(null);
         try {
-            if (needsBootstrap) {
+            if (mode === "forgot") {
+                await forgotPassword(email);
+                setForgotSent(true);
+            } else if (needsBootstrap) {
                 await registerFirstAdmin(name, email, password);
             } else if (mode === "signup") {
                 await signup(name, email, password);
@@ -60,6 +65,12 @@ export default function LoginPage() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const switchMode = (next: Mode) => {
+        setMode(next);
+        setError(null);
+        setForgotSent(false);
     };
 
     return (
@@ -131,76 +142,108 @@ export default function LoginPage() {
                     </div>
 
                     <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
-                        {needsBootstrap ? "Create the admin account" : mode === "signup" ? "Create an account" : "Welcome back"}
+                        {needsBootstrap
+                            ? "Create the admin account"
+                            : mode === "signup"
+                                ? "Create an account"
+                                : mode === "forgot"
+                                    ? "Reset your password"
+                                    : "Welcome back"}
                     </h2>
                     <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
                         {needsBootstrap
                             ? "No users exist yet. The first account you create becomes the administrator."
                             : mode === "signup"
                                 ? "Set up your account to start mapping migrations."
-                                : "Sign in to continue to your migration projects."}
+                                : mode === "forgot"
+                                    ? "Enter your account's email and we'll send you a reset link."
+                                    : "Sign in to continue to your migration projects."}
                     </p>
 
-                    <form className="mt-7 flex flex-col gap-4" onSubmit={handleSubmit}>
-                        {isSignupForm && (
+                    {mode === "forgot" && forgotSent ? (
+                        <div className="mt-7 flex flex-col items-center gap-3 text-center">
+                            <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-emerald-400" />
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                If <span className="font-medium">{email}</span> has an account, a reset link is on its way.
+                            </p>
+                        </div>
+                    ) : (
+                        <form className="mt-7 flex flex-col gap-4" onSubmit={handleSubmit}>
+                            {isSignupForm && (
+                                <Input
+                                    label="Full name"
+                                    autoComplete="name"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                />
+                            )}
                             <Input
-                                label="Full name"
-                                autoComplete="name"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
+                                label="Email"
+                                type="email"
+                                autoComplete="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
                             />
-                        )}
-                        <Input
-                            label="Email"
-                            type="email"
-                            autoComplete="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                        />
-                        <Input
-                            label="Password"
-                            type={showPassword ? "text" : "password"}
-                            autoComplete={isSignupForm ? "new-password" : "current-password"}
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            rightSlot={
+                            {mode !== "forgot" && (
+                                <Input
+                                    label="Password"
+                                    type={showPassword ? "text" : "password"}
+                                    autoComplete={isSignupForm ? "new-password" : "current-password"}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    rightSlot={
+                                        <button
+                                            type="button"
+                                            tabIndex={-1}
+                                            onClick={() => setShowPassword((v) => !v)}
+                                            className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                                        >
+                                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </button>
+                                    }
+                                />
+                            )}
+
+                            {mode === "login" && (
                                 <button
                                     type="button"
-                                    tabIndex={-1}
-                                    onClick={() => setShowPassword((v) => !v)}
-                                    className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                                    onClick={() => switchMode("forgot")}
+                                    className="-mt-2 self-end text-xs text-indigo-600 hover:underline dark:text-indigo-400"
                                 >
-                                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    Forgot password?
                                 </button>
-                            }
-                        />
+                            )}
 
-                        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+                            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-                        <Button
-                            type="submit"
-                            loading={loading}
-                            disabled={!email || !password || (isSignupForm && !name)}
-                            className="mt-1 w-full"
-                        >
-                            {needsBootstrap
-                                ? "Create admin account"
-                                : mode === "signup"
-                                    ? "Create account"
-                                    : "Sign in"}
-                        </Button>
-                    </form>
+                            <Button
+                                type="submit"
+                                loading={loading}
+                                disabled={mode === "forgot" ? !email : !email || !password || (isSignupForm && !name)}
+                                className="mt-1 w-full"
+                            >
+                                {needsBootstrap
+                                    ? "Create admin account"
+                                    : mode === "signup"
+                                        ? "Create account"
+                                        : mode === "forgot"
+                                            ? "Send reset link"
+                                            : "Sign in"}
+                            </Button>
+                        </form>
+                    )}
 
-                    {!needsBootstrap && (
+                    {!needsBootstrap && (mode !== "login" || openSignupEnabled) && (
                         <button
                             type="button"
-                            onClick={() => {
-                                setMode(mode === "login" ? "signup" : "login");
-                                setError(null);
-                            }}
+                            onClick={() => switchMode(mode === "login" ? "signup" : "login")}
                             className="mt-5 w-full text-center text-sm text-indigo-600 hover:underline dark:text-indigo-400"
                         >
-                            {mode === "login" ? "Need an account? Sign up" : "Already have an account? Sign in"}
+                            {mode === "forgot"
+                                ? "Back to sign in"
+                                : mode === "login"
+                                    ? "Need an account? Sign up"
+                                    : "Already have an account? Sign in"}
                         </button>
                     )}
                 </div>

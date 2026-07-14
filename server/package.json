@@ -23,6 +23,7 @@
     "multer": "^2.2.0",
     "mysql2": "^3.22.5",
     "node-cron": "^4.5.0",
+    "nodemailer": "^9.0.3",
     "pdfkit": "^0.19.1",
     "pg": "^8.22.0",
     "uuid": "^14.0.1"
@@ -35,6 +36,7 @@
     "@types/multer": "^2.2.0",
     "@types/node": "^26.0.1",
     "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^8.0.1",
     "@types/pdfkit": "^0.17.6",
     "@types/pg": "^8.20.0",
     "@types/uuid": "^10.0.0",

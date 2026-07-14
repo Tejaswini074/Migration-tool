@@ -13,6 +13,7 @@ interface AuthContextValue {
     user: AuthUser | null;
     loading: boolean;
     needsBootstrap: boolean;
+    openSignupEnabled: boolean;
     login: (email: string, password: string) => Promise<void>;
     registerFirstAdmin: (name: string, email: string, password: string) => Promise<void>;
     signup: (name: string, email: string, password: string) => Promise<void>;
@@ -25,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [loading, setLoading] = useState(true);
     const [needsBootstrap, setNeedsBootstrap] = useState(false);
+    const [openSignupEnabled, setOpenSignupEnabled] = useState(false);
 
     useEffect(() => {
         (async () => {
@@ -41,7 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
 
             try {
-                setNeedsBootstrap(await getBootstrapStatus());
+                const status = await getBootstrapStatus();
+                setNeedsBootstrap(status.needsBootstrap);
+                setOpenSignupEnabled(status.openSignupEnabled);
             } catch {
                 // ignore here - the login/bootstrap form will surface connection errors on submit
             }
@@ -75,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return (
         <AuthContext.Provider
-            value={{ user, loading, needsBootstrap, login, registerFirstAdmin, signup, logout }}
+            value={{ user, loading, needsBootstrap, openSignupEnabled, login, registerFirstAdmin, signup, logout }}
         >
             {children}
         </AuthContext.Provider>

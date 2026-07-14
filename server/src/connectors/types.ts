@@ -60,6 +60,13 @@ export interface IConnector {
         tableName: string, column: string, sinceValue: any, limit: number, offset: number
     ): Promise<Record<string, any>[]>;
     insertRow(tableName: string, row: Record<string, any>): Promise<InsertResult>;
+    /**
+     * Insert-or-update: if a row already exists matching `conflictColumns` (typically the
+     * destination's primary key), update it in place instead of erroring on the unique/PK
+     * violation a plain `insertRow` would hit. Optional because it's meaningless for a
+     * read-only source like CsvConnector.
+     */
+    upsertRow?(tableName: string, row: Record<string, any>, conflictColumns: string[]): Promise<InsertResult>;
 
     countNulls(tableName: string, columnName: string): Promise<number>;
     countDuplicateValues(tableName: string, columnName: string): Promise<number>;

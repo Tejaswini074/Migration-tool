@@ -49,6 +49,9 @@ interface StartParams {
     startedBy: StartedBy;
     batchSize?: number;
     mode?: "full" | "incremental";
+    /** "upsert" updates the existing row (matched on the destination's mapped primary key)
+     *  instead of erroring on a unique-constraint violation - see resolveConflictColumns. */
+    insertMode?: "insert" | "upsert";
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -56,13 +59,16 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const insertWithRetry = async (
     connector: IConnector, tableName: string,
     row: Record<string, any>,
+    conflictColumns: string[] | null,
     attempts: number = ROW_RETRY_ATTEMPTS
 ) => {
     let lastError: any;
 
     for (let attempt = 0; attempt <= attempts; attempt++) {
         try {
-            return await connector.insertRow(tableName, row);
+            return conflictColumns && connector.upsertRow
+                ? await connector.upsertRow(tableName, row, conflictColumns)
+                : await connector.insertRow(tableName, row);
         } catch (err) {
             lastError = err;
             if (attempt < attempts) await sleep(ROW_RETRY_DELAY_MS * (attempt + 1));
@@ -70,6 +76,26 @@ const insertWithRetry = async (
     }
 
     throw lastError;
+};
+
+/**
+ * Upsert needs a column that uniquely identifies "the same logical row" across runs - the
+ * destination's primary key is the only thing we can infer that for automatically, and only
+ * if it's actually mapped (otherwise there's no source value to match against). Falls back to
+ * a plain insert for tables where that doesn't hold, rather than failing the whole run.
+ */
+const resolveConflictColumns = async (
+    destinationConnection: IConnector, table: any, insertMode?: "insert" | "upsert"
+): Promise<string[] | null> => {
+    if (insertMode !== "upsert") return null;
+
+    const destPkColumn = await destinationConnection.getPrimaryKeyColumn(table.destination_table);
+    if (!destPkColumn) return null;
+
+    const mappedDestCols = new Set(table.columns.map((c: any) => c.destination_column));
+    if (!mappedDestCols.has(destPkColumn)) return null;
+
+    return [destPkColumn];
 };
 
 class MigrationService {
@@ -215,6 +241,8 @@ class MigrationService {
                 const destinationIdMap = new Map<any, any>();
                 idMap.set(table.destination_table, destinationIdMap);
 
+                const conflictColumns = await resolveConflictColumns(destinationConnection, table, params.insertMode);
+
                 const incrementalMode = params.mode === "incremental"
                     && Boolean(table.high_water_column)
                     && Boolean(sourceConnection.readBatchSince);
@@ -248,7 +276,9 @@ class MigrationService {
                         }
 
                         try {
-                            const insertResult = await insertWithRetry(destinationConnection, table.destination_table, destRow);
+                            const insertResult = await insertWithRetry(
+                                destinationConnection, table.destination_table, destRow, conflictColumns
+                            );
 
                             if (sourcePkColumn && row[sourcePkColumn] !== undefined) {
                                 const newId = insertResult.insertId || row[sourcePkColumn];

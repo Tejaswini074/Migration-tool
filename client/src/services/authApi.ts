@@ -2,10 +2,10 @@ import { apiClient } from "./client";
 import type { AuthUser, ManagedUser, PagedParams, UserRole } from "../types";
 
 export const getBootstrapStatus = async () => {
-    const { data } = await apiClient.get<{ success: boolean; needsBootstrap: boolean }>(
+    const { data } = await apiClient.get<{ success: boolean; needsBootstrap: boolean; openSignupEnabled: boolean }>(
         "/auth/bootstrap-status"
     );
-    return data.needsBootstrap;
+    return { needsBootstrap: data.needsBootstrap, openSignupEnabled: data.openSignupEnabled };
 };
 
 export const registerFirstAdmin = async (payload: { name: string; email: string; password: string }) => {
@@ -39,6 +39,14 @@ export const getMe = async () => {
 
 export const changeOwnPassword = async (currentPassword: string, newPassword: string) => {
     await apiClient.put("/auth/me/password", { currentPassword, newPassword });
+};
+
+export const forgotPassword = async (email: string) => {
+    await apiClient.post("/auth/forgot-password", { email });
+};
+
+export const resetPassword = async (token: string, newPassword: string) => {
+    await apiClient.post("/auth/reset-password", { token, newPassword });
 };
 
 export const adminResetPassword = async (userId: number, newPassword: string) => {

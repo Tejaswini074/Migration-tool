@@ -5,7 +5,11 @@ import { AuthenticatedRequest } from "./auth.middleware";
 export const getBootstrapStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
         const total = await authService.countUsers();
-        res.json({ success: true, needsBootstrap: total === 0 });
+        res.json({
+            success: true,
+            needsBootstrap: total === 0,
+            openSignupEnabled: process.env.ALLOW_OPEN_SIGNUP === "true"
+        });
     } catch (err: any) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -33,8 +37,21 @@ export const register = async (req: AuthenticatedRequest, res: Response): Promis
     }
 };
 
+/**
+ * Open self-registration is opt-in (ALLOW_OPEN_SIGNUP=true) - closed by default so an instance
+ * pointed at a real database doesn't let anyone on the internet create an account for
+ * themselves. Bootstrap (the very first admin, via `register`) is unaffected by this gate.
+ */
 export const signup = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
+        if (process.env.ALLOW_OPEN_SIGNUP !== "true") {
+            res.status(403).json({
+                success: false,
+                message: "Self-service signup is disabled on this instance. Ask an admin to create your account."
+            });
+            return;
+        }
+
         const { name, email, password } = req.body;
 
         if (!name || !email || !password) {
@@ -71,6 +88,44 @@ export const login = async (req: AuthenticatedRequest, res: Response): Promise<v
         }
 
         res.json({ success: true, token: result.token, user: result.user });
+
+    } catch (err: any) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+export const forgotPassword = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            res.status(400).json({ success: false, message: "Email is required" });
+            return;
+        }
+
+        await authService.requestPasswordReset(email);
+        // Always the same response, whether or not the email matched an account.
+        res.json({ success: true, message: "If that email has an account, a reset link has been sent." });
+
+    } catch (err: any) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+export const resetPassword = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+        const { token, newPassword } = req.body;
+        if (!token || !newPassword) {
+            res.status(400).json({ success: false, message: "Token and new password are required" });
+            return;
+        }
+
+        const result = await authService.resetPassword(token, newPassword);
+        if (!result.ok) {
+            res.status(result.status).json({ success: false, message: result.message });
+            return;
+        }
+
+        res.json({ success: true });
 
     } catch (err: any) {
         res.status(500).json({ success: false, message: err.message });

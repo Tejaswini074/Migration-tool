@@ -45,6 +45,7 @@ export default function MigrationProgress({ projectId, source, destination }: Pr
     );
     const [batchSize, setBatchSize] = useState("500");
     const [mode, setMode] = useState<"full" | "incremental">("full");
+    const [insertMode, setInsertMode] = useState<"insert" | "upsert">("insert");
 
     return (
         <div className="flex flex-col gap-5">
@@ -60,7 +61,7 @@ export default function MigrationProgress({ projectId, source, destination }: Pr
                         </p>
                     </div>
 
-                    <div className="mt-4 grid max-w-md grid-cols-2 gap-3">
+                    <div className="mt-4 grid max-w-2xl grid-cols-3 gap-3">
                         <Input
                             label="Batch size"
                             type="number"
@@ -74,9 +75,27 @@ export default function MigrationProgress({ projectId, source, destination }: Pr
                             <option value="full">Full sync</option>
                             <option value="incremental">Incremental (only new rows)</option>
                         </Select>
+                        <Select
+                            label="On existing rows"
+                            value={insertMode}
+                            onChange={(e) => setInsertMode(e.target.value as "insert" | "upsert")}
+                        >
+                            <option value="insert">Insert only</option>
+                            <option value="upsert">Update if exists</option>
+                        </Select>
                     </div>
+                    {insertMode === "upsert" && (
+                        <p className="mt-2 max-w-2xl text-xs text-slate-500 dark:text-slate-400">
+                            Only applies to tables where the destination's primary key column is mapped - other
+                            tables fall back to insert-only.
+                        </p>
+                    )}
 
-                    <Button loading={starting} onClick={() => handleStart(Number(batchSize) || undefined, mode)} className="mt-4">
+                    <Button
+                        loading={starting}
+                        onClick={() => handleStart(Number(batchSize) || undefined, mode, insertMode)}
+                        className="mt-4"
+                    >
                         Run Migration
                     </Button>
                 </Card>

@@ -1,7 +1,12 @@
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { getAppDatabase } from "../config/appDatabase";
 import { AppUser, AuthTokenPayload, UserRole } from "./auth.types";
+import { sendPasswordResetEmail } from "../lib/mailer";
+
+const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
+const hashResetToken = (token: string): string => crypto.createHash("sha256").update(token).digest("hex");
 
 export type PublicUser = { id: number; name: string; email: string; role: UserRole };
 
@@ -25,6 +30,17 @@ class AuthService {
                 password_hash VARCHAR(255) NOT NULL,
                 role VARCHAR(20) NOT NULL DEFAULT 'user',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                token_hash VARCHAR(64) NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                used_at TIMESTAMP NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_token_hash (token_hash)
             )
         `);
     }
@@ -183,6 +199,66 @@ class AuthService {
         const db = getAppDatabase();
         const passwordHash = await bcrypt.hash(newPassword, 10);
         await db.execute("UPDATE users SET password_hash = ? WHERE id = ?", [passwordHash, userId]);
+        return { ok: true };
+    }
+
+    /**
+     * Always resolves `{ ok: true }` whether or not the email matches an account - the caller
+     * must not be able to tell the two cases apart, or this becomes a way to enumerate which
+     * emails have accounts. If a match is found, a single-use token is generated, its hash
+     * (never the raw token) is stored, and the raw token is emailed (or logged, if SMTP isn't
+     * configured - see mailer.ts) as a link the client turns into a reset-password call.
+     */
+    async requestPasswordReset(email: string): Promise<{ ok: true }> {
+        await this.ensureTables();
+        const user = await this.findByEmail(email);
+
+        if (user) {
+            const db = getAppDatabase();
+            const token = crypto.randomBytes(32).toString("hex");
+            const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+
+            await db.execute(
+                "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)",
+                [user.id, hashResetToken(token), expiresAt]
+            );
+
+            const appUrl = process.env.APP_URL || "http://localhost:5173";
+            const resetUrl = `${appUrl}/reset-password?token=${token}`;
+
+            try {
+                await sendPasswordResetEmail(user.email, resetUrl);
+            } catch (err) {
+                console.error("Failed to send password reset email:", err);
+            }
+        }
+
+        return { ok: true };
+    }
+
+    async resetPassword(token: string, newPassword: string): Promise<SimpleResult> {
+        if (newPassword.length < 8) {
+            return { ok: false, status: 400, message: "New password must be at least 8 characters" };
+        }
+
+        await this.ensureTables();
+        const db = getAppDatabase();
+        const tokenHash = hashResetToken(token);
+
+        const [rows]: any = await db.query(
+            `SELECT id, user_id FROM password_reset_tokens
+             WHERE token_hash = ? AND used_at IS NULL AND expires_at > NOW()`,
+            [tokenHash]
+        );
+        const record = rows[0];
+        if (!record) {
+            return { ok: false, status: 400, message: "This reset link is invalid or has expired" };
+        }
+
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+        await db.execute("UPDATE users SET password_hash = ? WHERE id = ?", [passwordHash, record.user_id]);
+        await db.execute("UPDATE password_reset_tokens SET used_at = NOW() WHERE id = ?", [record.id]);
+
         return { ok: true };
     }
 

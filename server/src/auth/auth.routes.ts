@@ -7,6 +7,8 @@ import {
     login,
     me,
     changeOwnPassword,
+    forgotPassword,
+    resetPassword,
     adminResetPassword,
     listUsers,
     createUserByAdmin,
@@ -30,6 +32,8 @@ router.get("/bootstrap-status", getBootstrapStatus);
 router.post("/register", authAttemptLimiter, register);
 router.post("/signup", authAttemptLimiter, signup);
 router.post("/login", authAttemptLimiter, login);
+router.post("/forgot-password", authAttemptLimiter, forgotPassword);
+router.post("/reset-password", authAttemptLimiter, resetPassword);
 
 router.get("/me", authenticate, me);
 router.put("/me/password", authenticate, authAttemptLimiter, changeOwnPassword);

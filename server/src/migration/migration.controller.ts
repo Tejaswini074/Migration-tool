@@ -9,7 +9,7 @@ import { AuthenticatedRequest } from "../auth/auth.middleware";
 export const runMigration = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
 
     try {
-        const { projectId, sourceConnectionId, destinationConnectionId, batchSize, mode } = req.body;
+        const { projectId, sourceConnectionId, destinationConnectionId, batchSize, mode, insertMode } = req.body;
         const isAdmin = req.user!.role === "admin";
         const sourceConnection = connectionManager.getOwned(sourceConnectionId, req.user!.userId, isAdmin);
         const destinationConnection = connectionManager.getOwned(destinationConnectionId, req.user!.userId, isAdmin);
@@ -48,6 +48,7 @@ export const runMigration = async (req: AuthenticatedRequest, res: Response): Pr
             destinationConnection,
             batchSize: batchSize ? Number(batchSize) : undefined,
             mode: mode === "incremental" ? "incremental" : "full",
+            insertMode: insertMode === "upsert" ? "upsert" : "insert",
             startedBy: {
                 userId: req.user!.userId,
                 name: req.user!.name,

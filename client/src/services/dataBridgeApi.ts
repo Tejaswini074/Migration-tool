@@ -171,6 +171,7 @@ export const runMigration = async (payload: {
     destinationConnectionId: string;
     batchSize?: number;
     mode?: "full" | "incremental";
+    insertMode?: "insert" | "upsert";
 }) => {
     const { data } = await apiClient.post<{ success: boolean; runId: string }>(
         "/migration/run",

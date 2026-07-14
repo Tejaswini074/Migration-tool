@@ -132,6 +132,34 @@ export class MySqlConnector implements IConnector {
         return { insertId: result.insertId };
     }
 
+    async upsertRow(
+        tableName: string, row: Record<string, any>, conflictColumns: string[]
+    ): Promise<InsertResult> {
+        const columnNames = Object.keys(row);
+
+        if (columnNames.length === 0) {
+            throw new Error("No columns are mapped for this table - nothing to insert");
+        }
+
+        const placeholders = columnNames.map(() => "?").join(", ");
+        const escapedColumns = columnNames.map((c) => `\`${c}\``).join(", ");
+
+        const updateCols = columnNames.filter((c) => !conflictColumns.includes(c));
+        // If every mapped column is part of the conflict key there's nothing left to update -
+        // this no-op keeps the statement valid instead of emitting an empty UPDATE clause.
+        const updateClause = updateCols.length > 0
+            ? updateCols.map((c) => `\`${c}\`=VALUES(\`${c}\`)`).join(", ")
+            : `\`${conflictColumns[0]}\`=\`${conflictColumns[0]}\``;
+
+        const [result]: any = await this.pool.execute(
+            `INSERT INTO \`${tableName}\` (${escapedColumns}) VALUES (${placeholders})
+             ON DUPLICATE KEY UPDATE ${updateClause}`,
+            columnNames.map((c) => row[c])
+        );
+
+        return { insertId: result.insertId };
+    }
+
     async countNulls(tableName: string, columnName: string): Promise<number> {
         const [rows]: any = await this.pool.query(
             `SELECT COUNT(*) total FROM \`${tableName}\` WHERE \`${columnName}\` IS NULL`

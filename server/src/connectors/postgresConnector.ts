@@ -172,6 +172,36 @@ export class PostgresConnector implements IConnector {
         return { insertId: primaryKeyColumn ? rows[0]?.[primaryKeyColumn] : undefined };
     }
 
+    async upsertRow(
+        tableName: string, row: Record<string, any>, conflictColumns: string[]
+    ): Promise<InsertResult> {
+        const columnNames = Object.keys(row);
+
+        if (columnNames.length === 0) {
+            throw new Error("No columns are mapped for this table - nothing to insert");
+        }
+
+        const quotedColumns = columnNames.map((c) => `"${c}"`).join(", ");
+        const placeholders = columnNames.map((_, i) => `$${i + 1}`).join(", ");
+        const conflictTarget = conflictColumns.map((c) => `"${c}"`).join(", ");
+
+        const updateCols = columnNames.filter((c) => !conflictColumns.includes(c));
+        const conflictAction = updateCols.length > 0
+            ? `DO UPDATE SET ${updateCols.map((c) => `"${c}"=EXCLUDED."${c}"`).join(", ")}`
+            : "DO NOTHING";
+
+        const primaryKeyColumn = await this.getPrimaryKeyColumn(tableName);
+        const returning = primaryKeyColumn ? ` RETURNING "${primaryKeyColumn}"` : "";
+
+        const { rows } = await this.pool.query(
+            `INSERT INTO "${tableName}" (${quotedColumns}) VALUES (${placeholders})
+             ON CONFLICT (${conflictTarget}) ${conflictAction}${returning}`,
+            columnNames.map((c) => row[c])
+        );
+
+        return { insertId: primaryKeyColumn ? rows[0]?.[primaryKeyColumn] : undefined };
+    }
+
     async countNulls(tableName: string, columnName: string): Promise<number> {
         const { rows } = await this.pool.query(
             `SELECT COUNT(*) total FROM "${tableName}" WHERE "${columnName}" IS NULL`
